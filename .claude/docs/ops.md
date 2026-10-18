@@ -6,7 +6,8 @@ Standard machine pattern (Harbinger/GameNight): one port, own tunnel, 5-min watc
   and the JSON API. GET/HEAD only (POST answers 501), path traversal refused, everything no-cache.
   `/api/health` answers 200 whenever the server is up; `stale: true` means the last good fetch is over
   72 h old. A change to `serve.py` needs `server.ps1 restart -Service marquee`. Cloudflare turns `no-cache`
-  on web/ files into a 4 h cache, so bump a `?v=` on the CSS/JS URLs when they change.
+  on web/ files into a 4 h cache, so bump the `?v=` on the CSS/JS URLs in `index.html` when they change
+  (web.md). Static files are read per request: no restart for a web/ change.
 - **server.ps1**: `marquee-api` + `marquee-tunnel` (alias `marquee`), added 2026-10-18 (backup
   `server.ps1.bak-marquee`).
 - **Tunnel**: `marquee` (created 2026-10-18), hostname `marquee.yaqzan.dev`. Config

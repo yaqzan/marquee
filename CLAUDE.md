@@ -20,7 +20,7 @@ take other festivals later. Read-only public site, no auth, no input surface.
 - `py -3.11 -m marquee serve`: site + API on 127.0.0.1:5007.
 - `C:\Development\server.ps1 start|status|logs|restart -Service marquee`: server + tunnel.
 - `ops\windows\install-tasks.ps1 -Controller C:\Development\server.ps1`: 5-min watchdog.
-- `py -3.11 -m unittest`: tests.
+- `py -3.11 -m unittest`: tests. `py -3.11 ops/web_smoke.py`: UI smoke test (node, scratch DB); run after any change to `web/`.
 
 ## Invariants
 
@@ -39,5 +39,6 @@ take other festivals later. Read-only public site, no auth, no input surface.
 
 ## Docs
 
-Data source, schema, WIFF payload traps: `.claude/docs/data.md` · hosting, tunnel, tasks: `.claude/docs/ops.md` ·
+Data source, schema, WIFF payload traps: `.claude/docs/data.md` · UI look, routes, rules: `.claude/docs/web.md` ·
+hosting, tunnel, tasks: `.claude/docs/ops.md` ·
 kanban: vault `Engineering Wiki/Projects/Marquee/`.

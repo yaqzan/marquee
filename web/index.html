@@ -2,49 +2,33 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f3e9d2">
 <title>Marquee</title>
-<style>
-  :root { --bg: #fafaf7; --fg: #1b1b1b; --muted: #6b6b66; --line: #dcdcd4; --accent: #9b2c2c; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #151514; --fg: #ececE6; --muted: #9a9a92; --line: #333330; --accent: #e07070; }
-  }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
-  main { max-width: 52rem; margin: 0 auto; padding: 2rem 16px; }
-  h1 { margin: 0 0 .25rem; letter-spacing: .04em; }
-  p.sub { margin: 0 0 1.5rem; color: var(--muted); }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); }
-  tr.cand td:first-child { color: var(--accent); font-weight: 600; }
-  code { color: var(--muted); }
-</style>
+<link rel="stylesheet" href="/marquee.css?v=2">
 </head>
 <body>
-<main>
-  <h1>Marquee</h1>
-  <p class="sub" id="sub">Loading</p>
-  <table>
-    <thead><tr><th>Day</th><th>Films</th><th>Sessions</th></tr></thead>
-    <tbody id="days"></tbody>
-  </table>
-  <p class="sub">The API is live: <code>/api/festival</code>, <code>/api/films</code>, <code>/api/sessions?day=YYYY-MM-DD</code>, <code>/api/plans</code>. The browsing interface is next.</p>
-</main>
-<script>
-fetch('/api/festival').then(r => r.json()).then(d => {
-  const f = d.festival;
-  document.getElementById('sub').textContent = f ? f.name + ', ' + f.starts_on + ' to ' + f.ends_on : 'No data yet';
-  const body = document.getElementById('days');
-  for (const day of d.days || []) {
-    const tr = document.createElement('tr');
-    if (day.candidate) tr.className = 'cand';
-    for (const v of [day.day, day.films, day.sessions]) {
-      const td = document.createElement('td');
-      td.textContent = v;
-      tr.appendChild(td);
-    }
-    body.appendChild(tr);
-  }
-}).catch(() => { document.getElementById('sub').textContent = 'Could not load the schedule'; });
-</script>
+<header class="bill">
+  <div class="bill-in">
+    <p class="bill-the">the</p>
+    <h1 class="bill-name">MARQUEE</h1>
+    <hr class="bill-rule">
+    <p class="bill-sub">A day-trip programme</p>
+    <p class="bill-fest" id="fest"></p>
+  </div>
+</header>
+<main id="app" aria-live="polite"><p class="note">Loading</p></main>
+<nav class="tabs" aria-label="Sections">
+  <a href="#/plans" data-tab="plans">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 6v12" stroke-dasharray="2 2"/></svg>
+    <span>Plans</span></a>
+  <a href="#/films" data-tab="films">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v18M16 3v18M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4"/></svg>
+    <span>Films</span></a>
+  <a href="#/schedule" data-tab="schedule">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/></svg>
+    <span>Schedule</span></a>
+</nav>
+<script src="/marquee.js?v=2"></script>
 </body>
 </html>
