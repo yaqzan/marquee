@@ -139,8 +139,11 @@ def films(c, q: dict) -> dict:
                        "LEFT JOIN tag g ON g.code=t.code"):
         tags.setdefault(r["film_id"], []).append({"code": r["code"], "label": r["label"]})
     sc = {x["film_id"]: x for x in c.execute("SELECT film_id, score, confidence FROM film_score")}
-    md = media(c, load_config())
+    cfg = load_config()
+    md = media(c, cfg)
+    labels = {x["code"]: x["label"] for x in c.execute("SELECT code, label FROM tag")}
     for r in rows:
+        r["why"] = score_view(c, cfg, r["id"], labels)
         m = md.get(r["id"], {})
         r["rt"], r["audience"], r["poster"] = m.get("rt"), m.get("audience"), m.get("poster")
         r["score"] = sc[r["id"]]["score"] if r["id"] in sc else None

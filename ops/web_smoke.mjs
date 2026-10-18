@@ -77,7 +77,7 @@ check('unknown route redirects to plans', location.hash === '#/plans', location.
 
 check('no unhandled errors', errors.length === 0, errors.join(' | '));
 await go('#/films');
-const titles = app.find(e => e.tag === 'h3').map(e => e.text());
+const titles = app.find(e => e.tag === 'h3').map(e => (e.children[0] && e.children[0].text ? e.children[0].text() : e.text()));
 check('title case: "The Siege of Paradise"', titles.includes('The Siege of Paradise'), titles.filter(x => /siege/i.test(x)).join('|'));
 check('title case: "Brunello: The Gracious Visionary"', titles.includes('Brunello: The Gracious Visionary'), titles.filter(x => /brunello/i.test(x)).join('|'));
 check('title case: "2026 WIFF Local Shorts 6"', titles.includes('2026 WIFF Local Shorts 6'), titles.filter(x => /shorts/i.test(x)).join('|'));
@@ -138,4 +138,19 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   check('missing poster: lettered placeholder, no broken image', ph.length === 1 && ph[0].text().trim().length === 1 &&
     app.find(e => e.tag === 'img' && /^poster/.test(e.className)).length === 0, ph.map(e => e.text()).join('|'));
   globalThis.fetch = prev;
+}
+
+// ---- score and reason on the films index tiles
+{
+  await go('#/films');
+  const tiles = app.find(e => e.tag === 'a' && /(^| )film( |$)/.test(e.className));
+  const tileFor = id => tiles.find(a => a.attrs.href === '#/film/' + id);
+  const full = allFilms.find(f => f.why && f.why.confidence > 0.6 && f.why.critics.some(c => !c.minor) && f.sessions.some(s => ['2026-10-31','2026-11-01','2026-11-07','2026-11-08'].includes(s.starts_at.slice(0, 10))));
+  const tt = tileFor(full.id).text();
+  const reason = full.why.critics.filter(c => !c.minor).map(c => ({ rt: 'RT', metacritic: 'Metacritic', imdb: 'IMDb', tmdb: 'TMDB' }[c.source] + ' ' + c.value))[0];
+  check('tile: shows the score and the first reason', tt.includes(String(Math.round(full.score))) && tt.includes(reason), tt);
+  const unrated = allFilms.find(f => f.why && f.why.confidence < 0.15 && !f.why.tags.length && !f.why.taste.nudge && tileFor(f.id));
+  check('tile: no data = "Unrated", not a default 50', !!unrated && tileFor(unrated.id).text().includes('Unrated') && !/\b50\b/.test(tileFor(unrated.id).text().replace(/\d+ min/, '')), unrated && tileFor(unrated.id).text());
+  const tagsOnly = allFilms.find(f => f.why && f.why.confidence < 0.15 && f.why.tags.length && tileFor(f.id));
+  check('tile: tags-only score is labelled as such', !!tagsOnly && tileFor(tagsOnly.id).text().includes('Festival tags only'), tagsOnly && tileFor(tagsOnly.id).text());
 }

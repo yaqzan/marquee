@@ -82,6 +82,19 @@ function reasonLine(w) {
   return bits.join(' · ');
 }
 
+// What a tile says about a film's score. A film with nothing behind its number (no critic scores, no festival
+// tags, no taste match) is "Unrated" rather than a default 50; tags-only scores are marked as such.
+function tileScore(w) {
+  if (!w) return { chip: null, text: '' };
+  const thin = w.confidence < 0.15;
+  if (thin && !w.tags.length && !w.taste.nudge) return { chip: h('span', { class: 'scorechip none', title: 'No critic scores or festival tags yet' }, 'Unrated'), text: '' };
+  const why = reasonLine(w);
+  return {
+    chip: h('span', { class: 'scorechip' + (thin ? ' thin' : ''), title: w.coverage }, Math.round(w.score)),
+    text: thin ? 'Festival tags only' + (why ? ': ' + why : '') : why,
+  };
+}
+
 function whyCard(w) {
   if (!w) return null;
   const sec = (title, list) => h('div', { class: 'why-sec' }, h('h4', null, title), h('ul', { class: 'why-list' }, list));
@@ -261,6 +274,7 @@ async function filmsView() {
 }
 
 function filmCard(f, title, days) {
+  const ts = tileScore(f.why);
   const shown = f.sessions.filter(s => !days || days.includes(s.starts_at.slice(0, 10)));
   const chips = shown.slice(0, 4).map(s => h('span', { class: 'sess' }, `${fmtDay(s.starts_at.slice(0, 10))} · ${fmtTime(s.starts_at)} · ${s.building || s.venue}`));
   if (shown.length > 4) chips.push(h('span', { class: 'sess' }, `+${shown.length - 4} more`));
@@ -268,8 +282,9 @@ function filmCard(f, title, days) {
   return h('a', { class: 'film', href: '#/film/' + f.id },
     poster(f.poster, title, 'sm'),
     h('div', { class: 'film-body' },
-      h('h3', null, h('span', null, title), f.confidence >= 0.15 ? h('span', { class: 'scorechip', title: 'Score' }, Math.round(f.score)) : null),
-      h('p', { class: 'meta' }, meta), badges(f, false), chips,
+      h('h3', null, h('span', null, title), ts.chip),
+      h('p', { class: 'meta' }, meta), badges(f, false),
+      ts.text ? h('p', { class: 'meta why-line' }, ts.text) : null, chips,
       cleanTags(f.tags).slice(0, 3).map(t => h('span', { class: 'tag' }, titleCase(t)))));
 }
 

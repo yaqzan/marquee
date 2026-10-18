@@ -24,8 +24,10 @@ The film page shows a score card built from `/api/films/<id>` -> `why`: the scor
 (Festival tags only < 15% confidence, Some critic scores < 50%, Well covered), critics and audiences with vote
 counts (sources that barely count carry a "barely counts" badge), festival picks with their points, and the
 people behind any taste nudge. Plan timelines show `Score N` plus a one-line reason under each film (`reasonLine`
-in marquee.js; low-weight sources are left out). Film cards show a score chip only when confidence >= 0.15, so a
-tags-only 55 is never presented as a verdict. The server builds the breakdown (`serve.score_view`) from
+in marquee.js; low-weight sources are left out). Film tiles (the index) show the score chip plus the reason line (`tileScore`): critic scores with a real
+weight, festival tags, the taste people. Confidence under 0.15 gets a dashed chip and "Festival tags only: ..."
+so a tags-only 55 is never presented as a verdict; a film with no critic scores, no tags and no taste match shows
+"Unrated" instead of the default 50 (134 of 236 films today). The list API carries `why` for every film (~250 KB). The server builds the breakdown (`serve.score_view`) from
 `film_score.parts`; the UI never recomputes a score. The film page also shows director and top-billed cast.
 
 ## Posters and badges
