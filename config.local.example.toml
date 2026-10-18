@@ -1,0 +1,7 @@
+# Copy to config.local.toml (gitignored) and fill in. Merged over marquee/config.toml.
+
+[keys]
+# Free key from themoviedb.org (Settings > API). Either the v3 API key or the long v4 read access token.
+tmdb = ""
+# Free key from omdbapi.com/apikey.aspx (1,000 requests a day), emailed after you activate it.
+omdb = ""

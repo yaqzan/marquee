@@ -68,6 +68,35 @@ CREATE TABLE IF NOT EXISTS session (
 CREATE INDEX IF NOT EXISTS session_day ON session(substr(starts_at, 1, 10));
 CREATE INDEX IF NOT EXISTS session_film ON session(film_id);
 
+-- Enrichment: who made the film and where it was matched (TMDB), and the critic scores found for it.
+CREATE TABLE IF NOT EXISTS film_meta (
+    film_id    TEXT PRIMARY KEY REFERENCES film(id) ON DELETE CASCADE,
+    tmdb_id    INTEGER,
+    imdb_id    TEXT,
+    director   TEXT,
+    year       INTEGER,
+    match      TEXT NOT NULL,               -- 'runtime', 'title', 'none' (how the TMDB match was made)
+    note       TEXT,
+    fetched_at TEXT NOT NULL,               -- the TMDB lookup
+    omdb_at    TEXT                         -- the OMDb lookup (own daily budget); NULL = not yet
+);
+CREATE TABLE IF NOT EXISTS film_rating (
+    film_id    TEXT NOT NULL REFERENCES film(id) ON DELETE CASCADE,
+    source     TEXT NOT NULL,               -- metacritic, rt, imdb, tmdb
+    score      REAL NOT NULL,               -- normalised to 0-100
+    votes      INTEGER,
+    fetched_at TEXT NOT NULL,
+    PRIMARY KEY (film_id, source)
+);
+-- The computed score and the parts it came from (rebuilt by `marquee plan`).
+CREATE TABLE IF NOT EXISTS film_score (
+    film_id    TEXT PRIMARY KEY REFERENCES film(id) ON DELETE CASCADE,
+    score      REAL NOT NULL,
+    confidence REAL NOT NULL,               -- 0 = pedigree prior only, toward 1 = mostly real sources
+    parts      TEXT NOT NULL,               -- JSON: prior, pedigree tags, sources used
+    scored_at  TEXT NOT NULL
+);
+
 -- Every network fetch, for the min-interval guard and for knowing how fresh the data is.
 CREATE TABLE IF NOT EXISTS fetch_log (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

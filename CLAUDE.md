@@ -16,6 +16,8 @@ take other festivals later. Read-only public site, no auth, no input surface.
 - `py -3.11 -m marquee fetch [--force]`: pull the WIFF schedule (2 requests), save the raw snapshot, import.
   Refuses inside `[fetch] min_interval_minutes` unless `--force`. Run it when you want fresh data.
 - `py -3.11 -m marquee import [file]`: re-import a saved snapshot (newest by default), no network.
+- `py -3.11 -m marquee plan`: score every film, pick the best lineup per candidate day, rank the days (writes `plan`).
+- `py -3.11 -m marquee enrich [--limit N]`: TMDB match + OMDb critic scores; needs `[keys]` in `config.local.toml`.
 - `py -3.11 -m marquee show`: counts per day and venue, last fetch.
 - `py -3.11 -m marquee serve`: site + API on 127.0.0.1:5007.
 - `C:\Development\server.ps1 start|status|logs|restart -Service marquee`: server + tunnel.
@@ -34,6 +36,8 @@ take other festivals later. Read-only public site, no auth, no input surface.
 - Imports never delete: a film/session the feed stops listing gets `removed_at`; every difference lands
   in `change`. A payload under half the size of what we hold withdraws nothing.
 - Human judgement (tier, rating, hand edits) is never overwritten by a pipeline.
+- **Weight only what validates.** The taste nudge stays 0 until a backtest on the owner's Arbiter data clears
+  `taste_min_rho` (data.md has the first result). Never rank on a signal that was not backtested.
 - LLM steps (later) dispatch a Claude Code subagent from prompt FILES; no API key exists on this box.
 - Page copy (web/): no em-dashes, no "X, not Y", plain sentences. Data goes in via textContent only.
 

@@ -2,6 +2,9 @@
 
 fetch    pull the WIFF schedule (2 requests), keep the raw snapshot, import into the database
 import   re-import a saved snapshot (marquee/state/raw/schedule-*.json), no network
+enrich   match films to TMDB and pull critic scores from OMDb (needs [keys] in config.local.toml)
+backtest does critic score or a taste model predict the owner's Arbiter ranking? (Spearman)
+plan     score every film, then find and store the best lineup per candidate day (ranked)
 show     print what the database holds, per day and venue
 serve    the public site on 127.0.0.1:5007
 """
@@ -13,7 +16,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import RAW_DIR, load_config, store, wiff
+from . import RAW_DIR, backtest, enrich, load_config, planner, score, store, wiff
 
 
 def cmd_fetch(args) -> int:
@@ -75,6 +78,43 @@ def cmd_show(_args) -> int:
     return 0
 
 
+def cmd_enrich(args) -> int:
+    cfg = load_config()
+    conn = store.connect()
+    st = enrich.run(conn, cfg, limit=args.limit)
+    print(f"matched {st['matched']}, unmatched {st['unmatched']}, OMDb lookups {st['omdb']}")
+    if st["stopped"]:
+        print("stopped:", st["stopped"])
+        return 1
+    return 0
+
+
+def cmd_backtest(_args) -> int:
+    cfg = load_config()
+    gate = cfg["score"]["taste_min_rho"]
+    for label, rho, n in backtest.run(cfg):
+        print(f"{label:<52} rho {rho:6.3f}  n={n}  " + ("clears the gate" if rho >= gate else f"below {gate}"))
+    return 0
+
+
+def cmd_plan(args) -> int:
+    cfg = load_config()
+    conn = store.connect()
+    print(f"scored {score.score_all(conn, cfg)} films")
+    days = planner.build(conn, cfg, [args.day] if args.day else None)
+    conn.commit()
+    if not days:
+        print("no valid lineup on any candidate day")
+        return 1
+    for d in days:
+        b = d["best"]
+        print(f"#{d['rank']} {d['day']}  score {b['score']}  ${b['cost'] // 100}  changes {b['changes']}  conf {b['confidence']}")
+        for alt, tag in [(b, "*")] + [(a, " ") for a in d["alts"]]:
+            print(f"   {tag} {alt['score']:5.1f}  " + "  |  ".join(
+                f"{planner.fmt(c.start)} {c.title.title()[:28]} ({c.building.split()[0]})" for c in alt["lineup"]))
+    return 0
+
+
 def cmd_serve(_args) -> int:
     from . import serve
     serve.serve()
@@ -90,6 +130,13 @@ def main(argv=None) -> int:
     i = sub.add_parser("import")
     i.add_argument("file", nargs="?", help="a saved snapshot; default the newest")
     i.set_defaults(fn=cmd_import)
+    en = sub.add_parser("enrich")
+    en.add_argument("--limit", type=int, help="look up at most this many new films this run")
+    en.set_defaults(fn=cmd_enrich)
+    sub.add_parser("backtest").set_defaults(fn=cmd_backtest)
+    pl = sub.add_parser("plan")
+    pl.add_argument("--day", help="only this day (YYYY-MM-DD); other days' plans are replaced too, so omit normally")
+    pl.set_defaults(fn=cmd_plan)
     sub.add_parser("show").set_defaults(fn=cmd_show)
     sub.add_parser("serve").set_defaults(fn=cmd_serve)
     args = ap.parse_args(argv)

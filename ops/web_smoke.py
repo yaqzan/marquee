@@ -23,6 +23,8 @@ FILMS = [("EXTRAVAGANT WAYS TO SAY GOODBYE", "09:00"), ("COWARD", "13:00"), ("FJ
 
 def seed(db: Path) -> None:
     conn = sqlite3.connect(db)
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("DELETE FROM plan")  # the scratch copy only: start from a known plan set
     conn.execute("INSERT INTO plan(festival, day, rank, score, cost_cents, summary, built_at) "
                  "VALUES ('wiff-2026', '2026-11-07', 1, 0.9, 5700, 'Test plan: three films, two in one building.', 'test')")
     pid = conn.execute("SELECT MAX(id) FROM plan").fetchone()[0]

@@ -28,6 +28,60 @@ title_re = "(?i)\\b(pass|ticket)\\b"
 [plan]
 # The days a day trip is built for (weekends only).
 candidate_days = ["2026-10-31", "2026-11-01", "2026-11-07", "2026-11-08"]
+films_per_day = 3
+earliest_start = "09:00"
+latest_end = "22:45"            # + drive_hours = home by 1 am
+drive_hours = 2.0               # each way
+home_label = "home"            # how plan text names where you drive from (set it in config.local.toml)
+arrival_buffer_min = 30         # parked and in the lobby before the first film
+buffer_same_building_min = 5    # changing screens inside one building
+buffer_between_buildings_min = 15
+meal_min_gap_min = 60           # a free block this long must fall inside each meal window
+lunch_window = ["11:30", "14:30"]
+dinner_window = ["16:30", "20:00"]
+max_total_runtime_min = 480     # fatigue cap
+# Prices (HST incl.). A premium screening is any film tagged premium_tag_code; the pass does not cover them.
+price_single_cents = 1900
+price_premium_cents = 4000
+price_premium_3pack_cents = 9900
+premium_tag_code = "0000000115"
+
+[score]
+# score = (sum of source scores weighted + prior_weight * prior) / (sum of weights + prior_weight), 0-100.
+# Thin or missing critic data therefore shrinks toward the pedigree prior, and `confidence` is the share of
+# weight that came from real sources. Nothing here is validated against the owner's taste yet (backtest,
+# 2026-10-18: Plex critic score vs Arbiter Elo rho 0.10; genre/country/decade taste rho -0.03), so
+# taste_nudge_max stays 0 until a feature set backtests above taste_min_rho.
+prior = 50
+prior_weight = 2.0
+diversity_weight = 6.0          # points off a lineup per unit of mean pairwise similarity (0-1)
+taste_nudge_max = 0.0
+taste_min_rho = 0.15
+
+# Points added to the prior for each WIFF category tag a film carries (festival pedigree).
+[score.pedigree]
+"0000000259" = 8                # CANNES
+"0000000251" = 6                # VINCENT'S PICKS
+"0000000249" = 5                # FESTIVAL DARLINGS
+"0000000267" = 7                # OSCAR SUBMISSIONS
+"0000000269" = 4                # PRE-RELEASE
+"0000000253" = 3                # FAMOUS FACES
+"0000000113" = 3                # WIFF PRIZE IN CANADIAN FILM
+"0000000115" = 4                # PREMIUM SCREENINGS
+
+# Critic sources: weight, and the vote count at which a source is half-trusted (0 = always full weight).
+[score.sources.metacritic]
+weight = 3.0
+half_votes = 0
+[score.sources.rt]
+weight = 2.0
+half_votes = 0
+[score.sources.imdb]
+weight = 1.0
+half_votes = 500
+[score.sources.tmdb]
+weight = 1.0
+half_votes = 100
 
 # Screen name (as WIFF reports it) -> building. Buildings are what walking time is measured between;
 # the two Capitol screens share one.
@@ -36,3 +90,10 @@ candidate_days = ["2026-10-31", "2026-11-01", "2026-11-07", "2026-11-08"]
 "OLG Pentastar - Capitol" = "Capitol Theatre"
 "Armouries - Sheehan Hall" = "Armouries"
 "Chrysler St. Clair Centre" = "Chrysler Theatre"
+
+[enrich]
+sleep_s = 0.3                   # between API calls
+omdb_daily_budget = 900         # the free key allows 1000 a day; a walk cut short resumes tomorrow
+retry_none_days = 7             # a film TMDB could not match is looked up again after this long
+runtime_tolerance_min = 3       # WIFF runtime vs TMDB runtime for a "runtime" match
+min_year = 2024                 # candidates older than this are not festival new releases

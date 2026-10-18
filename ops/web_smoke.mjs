@@ -44,7 +44,8 @@ check('plans: ranked ticket, titles title-cased', t.includes('Sat Nov 7') && t.i
 check('plans: cost + top pick', t.includes('$57') && t.includes('top pick'), t);
 check('plans: span 9:00 am to 8:51 pm', t.includes('9:00 am to 8:51 pm'), t);
 
-t = await go('#/plan/1');
+const planId = (await (await fetch('/api/plans')).json()).plans[0].id;
+t = await go('#/plan/' + planId);
 check('plan detail: times', t.includes('9:00 am') && t.includes('10:28 am') && t.includes('1:00 pm') && t.includes('6:25 pm') && t.includes('8:51 pm'), t);
 check('plan detail: lunch + dinner gaps', t.includes('2 h 32 min free: lunch') && t.includes('3 h 25 min free: dinner'), t);
 check('plan detail: summary', t.includes('Test plan: three films'), t);
