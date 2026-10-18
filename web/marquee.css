@@ -75,6 +75,19 @@ a.ticket:active { background: #f3ead2; }
 .shows .where { font-size: 13px; color: var(--muted); }
 .badge { font-size: 11px; color: var(--gold); border: 1px solid var(--gold); border-radius: 999px; padding: 0 7px; margin-left: 6px; white-space: nowrap; }
 
+/* Score and why */
+.film h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.scorechip { flex: none; font: 600 12px var(--sans); color: var(--red); border: 1px solid var(--red); border-radius: 999px; padding: 0 8px; }
+.whycard { border: 1px solid var(--rule); border-radius: 8px; background: var(--card); padding: 12px 14px; margin: 16px 0 4px; }
+.why-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.why-score { font: 400 40px/1 var(--serif); color: var(--red); min-width: 2.2ch; }
+.why-cov { font: 17px var(--serif); }
+.why-sec h4 { font: 600 11px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 12px 0 2px; }
+.why-list { list-style: none; margin: 0; padding: 0; }
+.why-list li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid var(--rule); font-size: 14px; }
+.why-list .v { color: var(--muted); white-space: nowrap; }
+.why-line { color: var(--red); }
+
 /* Schedule */
 .bldg { font: 400 17px var(--serif); margin: 18px 0 4px; padding-bottom: 4px; border-bottom: 1.5px solid var(--ink); }
 .slot { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--rule); color: inherit; text-decoration: none; }

@@ -70,6 +70,44 @@ function fmtDur(min) {
   return h2 ? (m ? `${h2} h ${m} min` : `${h2} h`) : `${m} min`;
 }
 const money = cents => '$' + (cents / 100).toFixed(cents % 100 ? 2 : 0);
+const fmtInt = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const SHORT = { rt: 'RT', metacritic: 'Metacritic', imdb: 'IMDb', tmdb: 'TMDB' };
+
+// "RT 96% · Metacritic 70 · Cannes · Taste +1.1: Miles Teller" (low-weight sources left out)
+function reasonLine(w) {
+  if (!w) return '';
+  const bits = w.critics.filter(c => !c.minor).map(c => `${SHORT[c.source] || c.name} ${c.value}`)
+    .concat(w.tags.map(t => titleCase(t.label)));
+  if (w.taste.nudge) bits.push(`Taste ${w.taste.nudge > 0 ? '+' : ''}${w.taste.nudge.toFixed(1)}: ${(w.taste.because[0] || '').replace(/ \([+-]\d+\)$/, '')}`);
+  return bits.join(' · ');
+}
+
+function whyCard(w) {
+  if (!w) return null;
+  const sec = (title, list) => h('div', { class: 'why-sec' }, h('h4', null, title), h('ul', { class: 'why-list' }, list));
+  const parts = [];
+  if (w.critics.length) {
+    parts.push(sec('Critics and audiences', w.critics.map(c => h('li', null,
+      h('span', null, c.name, c.minor ? h('span', { class: 'badge' }, 'barely counts') : null),
+      h('span', { class: 'v' }, c.value + (c.votes ? ` · ${fmtInt(c.votes)} votes` : ''))))));
+  } else {
+    parts.push(h('p', { class: 'meta' }, 'No critic scores yet, so this score rests on festival tags alone.'));
+  }
+  if (w.tags.length) {
+    parts.push(sec('Festival picks', w.tags.map(t => h('li', null, h('span', null, titleCase(t.label)), h('span', { class: 'v' }, '+' + t.points)))));
+  }
+  if (w.taste.nudge) {
+    parts.push(sec('Your taste', w.taste.because.map(b => h('li', null, h('span', null, b.replace(/ \([+-]\d+\)$/, '')),
+      h('span', { class: 'v' }, (b.match(/\(([+-]\d+)\)$/) || [])[1] || '')))));
+    parts.push(h('p', { class: 'meta' }, `Moves the score ${w.taste.nudge > 0 ? '+' : ''}${w.taste.nudge.toFixed(1)}. Based on films you've ranked with the same people.`));
+  }
+  return h('section', { class: 'whycard' },
+    h('div', { class: 'why-head' },
+      h('div', { class: 'why-score' }, Math.round(w.score)),
+      h('div', null, h('div', { class: 'why-cov' }, w.coverage), h('div', { class: 'meta' }, `Confidence ${Math.round(w.confidence * 100)}%`))),
+    parts);
+}
+
 const cleanTags = tags => (tags || []).map(t => t.label).filter(l => l && !/^\d+$/.test(l));
 
 const cache = {};
@@ -149,6 +187,7 @@ async function planView(id) {
       h('div', { class: 'tm' }, `${fmtMin(st.min)} – ${fmtMin(end)}`),
       h('h3', null, h('a', { href: '#/film/' + it.film_id }, titleCase(it.title))),
       h('p', { class: 'meta' }, it.venue),
+      it.why ? h('p', { class: 'meta why-line' }, `Score ${Math.round(it.why.score)}`, reasonLine(it.why) ? ' · ' + reasonLine(it.why) : '') : null,
       it.note ? h('p', { class: 'meta' }, it.note) : null));
   });
   screen(
@@ -203,7 +242,8 @@ function filmCard(f, title, days) {
   if (shown.length > 4) chips.push(h('span', { class: 'sess' }, `+${shown.length - 4} more`));
   const meta = [f.runtime_min ? `${f.runtime_min} min` : '', places(f.country), (f.genre || '').trim()].filter(Boolean).join(' · ');
   return h('a', { class: 'film', href: '#/film/' + f.id },
-    h('h3', null, title), h('p', { class: 'meta' }, meta), chips,
+    h('h3', null, h('span', null, title), f.confidence >= 0.15 ? h('span', { class: 'scorechip', title: 'Score' }, Math.round(f.score)) : null),
+    h('p', { class: 'meta' }, meta), chips,
     cleanTags(f.tags).slice(0, 3).map(t => h('span', { class: 'tag' }, titleCase(t))));
 }
 
@@ -224,7 +264,10 @@ async function filmView(id) {
       h('h2', null, titleCase(f.title)),
       h('p', { class: 'meta' }, meta),
       cleanTags(f.tags).map(t => h('span', { class: 'tag' }, titleCase(t))),
+      f.director ? h('p', { class: 'meta' }, 'Directed by ' + f.director) : null,
+      f.cast && f.cast.length ? h('p', { class: 'meta' }, 'With ' + f.cast.join(', ')) : null,
       f.synopsis ? syn : null, long ? more : null,
+      whyCard(f.why),
       h('h2', null, 'Showtimes'),
       h('ul', { class: 'shows' }, f.sessions.map(s => {
         const day = s.starts_at.slice(0, 10);

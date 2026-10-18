@@ -20,6 +20,7 @@ HOST, PORT = "127.0.0.1", 5007
 STALE_HOURS = 72  # a schedule older than this means refreshes are failing (WIFF edits it during the run)
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 FILM_RE = re.compile(r"^ST\d+$")
+SOURCE_NAMES = {"metacritic": "Metacritic", "rt": "Rotten Tomatoes", "imdb": "IMDb", "tmdb": "TMDB"}
 
 
 def _conn() -> sqlite3.Connection:
@@ -46,6 +47,32 @@ def health() -> dict:
         age = (datetime.now().astimezone() - datetime.fromisoformat(row[0])).total_seconds() / 3600
         out.update(last_fetch=row[0], age_hours=round(age, 1), stale=age >= STALE_HOURS)
     return out
+
+
+def _value(source: str, score: float) -> str:
+    return f"{score:.0f}%" if source == "rt" else f"{score:.0f}" if source == "metacritic" else f"{score / 10:.1f}"
+
+
+def score_view(c, cfg: dict, film_id: str, labels: dict | None = None) -> dict | None:
+    """The film's score and why: critic scores used, festival tags (with points), the people behind a taste nudge."""
+    r = c.execute("SELECT score, confidence, parts FROM film_score WHERE film_id=?", (film_id,)).fetchone()
+    if not r:
+        return None
+    parts = json.loads(r["parts"])
+    labels = labels if labels is not None else {x["code"]: x["label"] for x in c.execute("SELECT code, label FROM tag")}
+    ped = cfg["score"]["pedigree"]
+    critics = [{"source": x["source"], "name": SOURCE_NAMES.get(x["source"], x["source"]), "value": _value(x["source"], x["score"]),
+                "votes": x.get("votes"), "minor": x["weight"] < 0.25} for x in parts["sources"]]
+    tags = [{"label": labels.get(code, code), "points": ped.get(code, 0)} for code in parts["pedigree_codes"]]
+    nudge = parts.get("taste_nudge", 0)
+    conf = r["confidence"]
+    reasons = [f"{x['name']} {x['value']}" for x in critics if not x["minor"]] + [t["label"] for t in tags]
+    if nudge:
+        reasons.append(f"Taste {nudge:+.1f}: " + ", ".join(parts.get("taste_because", [])[:2]))
+    return {"score": r["score"], "confidence": conf,
+            "coverage": "Festival tags only" if conf < 0.15 else "Some critic scores" if conf < 0.5 else "Well covered",
+            "base": cfg["score"]["prior"], "critics": critics, "tags": tags,
+            "taste": {"nudge": nudge, "because": parts.get("taste_because", [])}, "reasons": reasons}
 
 
 def festival(c) -> dict:
@@ -90,7 +117,10 @@ def films(c, q: dict) -> dict:
     for r in c.execute("SELECT t.film_id, t.code, COALESCE(g.label, t.code) AS label FROM film_tag t "
                        "LEFT JOIN tag g ON g.code=t.code"):
         tags.setdefault(r["film_id"], []).append({"code": r["code"], "label": r["label"]})
+    sc = {x["film_id"]: x for x in c.execute("SELECT film_id, score, confidence FROM film_score")}
     for r in rows:
+        r["score"] = sc[r["id"]]["score"] if r["id"] in sc else None
+        r["confidence"] = sc[r["id"]]["confidence"] if r["id"] in sc else None
         r["tags"] = tags.get(r["id"], [])
         r["sessions"] = _rows(c, "SELECT s.id AS session_id, s.starts_at, s.status, v.name AS venue, v.building "
                                  "FROM session s JOIN venue v ON v.screen_id=s.screen_id "
@@ -105,6 +135,11 @@ def film(c, fid: str) -> dict | None:
     out = rows[0]
     out["tags"] = _rows(c, "SELECT t.code, COALESCE(g.label, t.code) AS label, g.group_name FROM film_tag t "
                            "LEFT JOIN tag g ON g.code=t.code WHERE t.film_id=?", (fid,))
+    meta = c.execute("SELECT director, cast_json, year, match FROM film_meta WHERE film_id=?", (fid,)).fetchone()
+    out["director"] = meta["director"] if meta else None
+    out["cast"] = json.loads(meta["cast_json"] or "[]") if meta else []
+    out["year"] = meta["year"] if meta else None
+    out["why"] = score_view(c, load_config(), fid)
     out["sessions"] = _rows(c, "SELECT s.id AS session_id, s.starts_at, s.status, v.name AS venue, v.building "
                                "FROM session s JOIN venue v ON v.screen_id=s.screen_id "
                                "WHERE s.film_id=? AND s.removed_at IS NULL ORDER BY s.starts_at", (fid,))
@@ -123,10 +158,14 @@ def plans(c, day: str | None) -> dict:
         where, args = "WHERE p.day=?", (day,)
     out = _rows(c, f"SELECT p.id, p.day, p.rank, p.score, p.cost_cents, p.summary, p.built_at FROM plan p {where} "
                    "ORDER BY p.rank", args)
+    cfg = load_config()
+    labels = {x["code"]: x["label"] for x in c.execute("SELECT code, label FROM tag")}
     for p in out:
         p["items"] = _rows(c, f"SELECT i.position, i.note, {SESSION_COLS} FROM plan_item i "
                               "JOIN session s ON s.id=i.session_id JOIN film f ON f.id=s.film_id "
                               "JOIN venue v ON v.screen_id=s.screen_id WHERE i.plan_id=? ORDER BY i.position", (p["id"],))
+        for it in p["items"]:
+            it["why"] = score_view(c, cfg, it["film_id"], labels)
     return {"plans": out}
 
 

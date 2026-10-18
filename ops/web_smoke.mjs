@@ -82,3 +82,22 @@ check('title case: "The Siege of Paradise"', titles.includes('The Siege of Parad
 check('title case: "Brunello: The Gracious Visionary"', titles.includes('Brunello: The Gracious Visionary'), titles.filter(x => /brunello/i.test(x)).join('|'));
 check('title case: "2026 WIFF Local Shorts 6"', titles.includes('2026 WIFF Local Shorts 6'), titles.filter(x => /shorts/i.test(x)).join('|'));
 console.log('sample titles:', titles.filter(x => /'|’|:|-/.test(x)).slice(0, 8).join(' | '));
+
+// ---- score and reasons
+const allFilms = (await (await fetch('/api/films')).json()).films;
+const covered = allFilms.filter(f => f.confidence > 0.6)[0];
+t = await go('#/film/' + covered.id);
+check('film page: score card with coverage and confidence', t.includes('Well covered') && /Confidence \d+%/.test(t), t.slice(0, 400));
+check('film page: critics section lists named sources', t.includes('Critics and audiences') && /(Rotten Tomatoes|Metacritic|IMDb)/.test(t), t.slice(0, 400));
+check('film page: directed by line', t.includes('Directed by'), t.slice(0, 300));
+const pt = allFilms.find(f => f.title === 'PAPER TIGER');
+t = await go('#/film/' + pt.id);
+check('film page: taste section names the people', t.includes('Your taste') && t.includes('Miles Teller') && t.includes('Festival picks'), t);
+check('film page: no raw uppercase tag leaked', !t.includes("VINCENT'S PICKS"), t);
+const thin = allFilms.find(f => f.confidence != null && f.confidence < 0.15);
+t = await go('#/film/' + thin.id);
+check('film page: thin-data film says festival tags only', t.includes('Festival tags only') || t.includes('No critic scores yet'), t.slice(0, 300));
+await go('#/films');
+check('films list: score chips only on films with data', app.find(e => e.className === 'scorechip').length > 5, String(app.find(e => e.className === 'scorechip').length));
+t = await go('#/plan/' + planId);
+check('plan timeline: score and reasons under each film', (t.match(/Score \d+/g) || []).length === 3, t);

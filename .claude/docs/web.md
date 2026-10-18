@@ -18,6 +18,16 @@ Palette and fonts are CSS variables at the top of `marquee.css`: paper `#f3e9d2`
 16:30-20:00) · `#/films` (filters: trip days / all / one day, title search, genre) · `#/film/<ST id>` ·
 `#/schedule[/<YYYY-MM-DD>]` (one day, grouped by building).
 
+## Score and why
+
+The film page shows a score card built from `/api/films/<id>` -> `why`: the score (0-100), a coverage label
+(Festival tags only < 15% confidence, Some critic scores < 50%, Well covered), critics and audiences with vote
+counts (sources that barely count carry a "barely counts" badge), festival picks with their points, and the
+people behind any taste nudge. Plan timelines show `Score N` plus a one-line reason under each film (`reasonLine`
+in marquee.js; low-weight sources are left out). Film cards show a score chip only when confidence >= 0.15, so a
+tags-only 55 is never presented as a verdict. The server builds the breakdown (`serve.score_view`) from
+`film_score.parts`; the UI never recomputes a score. The film page also shows director and top-billed cast.
+
 ## Rules
 
 - **Data goes in as DOM text only** (`h()` builds elements with `createTextNode`; no innerHTML on data).

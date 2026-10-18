@@ -29,7 +29,8 @@ Raw payloads are kept by content hash in `marquee/state/raw/` so any import can 
 ## API (read-only, serve.py)
 
 `/api/health` (always 200), `/api/festival` (days with session counts, venues), `/api/films` (filters:
-`q`, `genre`, `country`, `tag`, `day`), `/api/films/<id>`, `/api/sessions?day=`, `/api/plans[?day=]`.
+`q`, `genre`, `country`, `tag`, `day`), `/api/films/<id>` (adds director, cast, year and `why`, the score breakdown), `/api/sessions?day=`,
+`/api/plans[?day=]` (each item carries `why` too). List rows carry `score` and `confidence`.
 
 ## Scoring (marquee/score.py, config [score])
 
