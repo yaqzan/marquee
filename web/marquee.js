@@ -84,10 +84,12 @@ function reasonLine(w) {
 
 // What a tile says about a film's score. A film with nothing behind its number (no critic scores, no festival
 // tags, no taste match) is "Unrated" rather than a default 50; tags-only scores are marked as such.
+const isUnrated = w => !w || (w.confidence < 0.15 && !w.tags.length && !w.taste.nudge);
+
 function tileScore(w) {
   if (!w) return { chip: null, text: '' };
   const thin = w.confidence < 0.15;
-  if (thin && !w.tags.length && !w.taste.nudge) return { chip: h('span', { class: 'scorechip none', title: 'No critic scores or festival tags yet' }, 'Unrated'), text: '' };
+  if (isUnrated(w)) return { chip: h('span', { class: 'scorechip none', title: 'No critic scores or festival tags yet' }, 'Unrated'), text: '' };
   const why = reasonLine(w);
   return {
     chip: h('span', { class: 'scorechip' + (thin ? ' thin' : ''), title: w.coverage }, Math.round(w.score)),
@@ -235,7 +237,8 @@ async function planView(id) {
     p.summary ? h('div', { class: 'why' }, p.summary) : null);
 }
 
-const filmState = { day: 'trip', q: '', genre: '' };
+const filmState = { day: 'trip', q: '', genre: '', sort: 'az' };
+const SORTS = [['az', 'A to Z'], ['score', 'Highest score'], ['time', 'Earliest showtime']];
 
 async function filmsView() {
   const [fest, data] = await Promise.all([api('/api/festival'), api('/api/films')]);
@@ -243,6 +246,8 @@ async function filmsView() {
   const genres = [...new Set(data.films.map(f => (f.genre || '').trim()).filter(Boolean))].sort();
   const listEl = h('div');
   const countEl = h('p', { class: 'count' });
+  const sortSel = h('select', { 'aria-label': 'Sort films', class: 'sortsel' }, SORTS.map(([v, l]) => h('option', { value: v }, l)));
+  sortSel.value = filmState.sort;
   const chipsEl = h('div', { class: 'chips' });
   const search = h('input', { type: 'search', placeholder: 'Search titles', 'aria-label': 'Search titles', value: filmState.q });
   const sel = h('select', { 'aria-label': 'Genre' }, h('option', { value: '' }, 'All genres'),
@@ -258,7 +263,16 @@ async function filmsView() {
       if (filmState.genre && (f.genre || '').trim() !== filmState.genre) return false;
       if (q && !f.title.toLowerCase().includes(q)) return false;
       return !days || f.sessions.some(s => days.includes(s.starts_at.slice(0, 10)));
-    }).map(f => ({ f, title: titleCase(f.title) })).sort((a, b) => a.title.localeCompare(b.title));
+    }).map(f => ({ f, title: titleCase(f.title) }));
+    // the earliest showtime inside the chosen days; "Unrated" films always sink below real scores
+    const firstShow = f => f.sessions.filter(x => !days || days.includes(x.starts_at.slice(0, 10))).map(x => x.starts_at).sort()[0] || '9999';
+    const az = (a, b) => a.title.localeCompare(b.title);
+    const cmp = {
+      az,
+      score: (a, b) => (isUnrated(a.f.why) - isUnrated(b.f.why)) || ((b.f.score || 0) - (a.f.score || 0)) || az(a, b),
+      time: (a, b) => firstShow(a.f).localeCompare(firstShow(b.f)) || az(a, b),
+    }[filmState.sort] || az;
+    rows.sort(cmp);
     chipsEl.replaceChildren(
       chip('Trip days', filmState.day === 'trip', () => { filmState.day = 'trip'; update(); }),
       chip('All days', filmState.day === 'all', () => { filmState.day = 'all'; update(); }),
@@ -269,7 +283,8 @@ async function filmsView() {
   }
   search.addEventListener('input', () => { filmState.q = search.value; update(); });
   sel.addEventListener('change', () => { filmState.genre = sel.value; update(); });
-  screen(h('h2', null, 'Films'), chipsEl, h('div', { class: 'row' }, search, sel), countEl, listEl);
+  sortSel.addEventListener('change', () => { filmState.sort = sortSel.value; update(); });
+  screen(h('h2', null, 'Films'), chipsEl, h('div', { class: 'row' }, search, sel), h('div', { class: 'countrow' }, countEl, sortSel), listEl);
   update();
 }
 

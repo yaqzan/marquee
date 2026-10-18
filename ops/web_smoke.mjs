@@ -154,3 +154,30 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   const tagsOnly = allFilms.find(f => f.why && f.why.confidence < 0.15 && f.why.tags.length && tileFor(f.id));
   check('tile: tags-only score is labelled as such', !!tagsOnly && tileFor(tagsOnly.id).text().includes('Festival tags only'), tagsOnly && tileFor(tagsOnly.id).text());
 }
+
+// ---- sort control on the films index
+{
+  await go('#/films');
+  const sortSel = () => app.find(e => e.tag === 'select' && e.attrs['aria-label'] === 'Sort films')[0];
+  const choose = v => { const s = sortSel(); s.value = v; (s.ls.change || []).forEach(fn => fn()); };
+  const tiles = () => app.find(e => e.tag === 'a' && /(^| )film( |$)/.test(e.className));
+  const idOf = a => a.attrs.href.replace('#/film/', '');
+  const trip = ['2026-10-31', '2026-11-01', '2026-11-07', '2026-11-08'];
+  const byId = Object.fromEntries(allFilms.map(f => [f.id, f]));
+
+  const azTitles = tiles().map(a => a.find(e => e.tag === 'h3')[0].children[0].text());
+  check('sort: default is A to Z', azTitles.every((t, i) => i === 0 || azTitles[i - 1].localeCompare(t) <= 0), azTitles.slice(0, 4).join('|'));
+
+  choose('score');
+  const chips = tiles().map(a => a.find(e => /(^| )scorechip( |$)/.test(e.className))[0]);
+  const firstNone = chips.findIndex(c => /none/.test(c.className));
+  const nums = chips.slice(0, firstNone < 0 ? chips.length : firstNone).map(c => Number(c.text()));
+  check('sort: highest score first, scores never increase down the list', nums.length > 5 && nums.every((n, i) => i === 0 || nums[i - 1] >= n), nums.join(','));
+  check('sort: Unrated films sink below every scored film', firstNone > 0 && chips.slice(firstNone).every(c => /none/.test(c.className)), String(firstNone));
+
+  choose('time');
+  const firsts = tiles().map(a => byId[idOf(a)].sessions.map(s => s.starts_at).filter(s => trip.includes(s.slice(0, 10))).sort()[0]);
+  check('sort: earliest showtime first (within the chosen days)', firsts.length > 20 && firsts.every((t, i) => i === 0 || firsts[i - 1] <= t), firsts.slice(0, 3).join(' '));
+
+  choose('az');
+}

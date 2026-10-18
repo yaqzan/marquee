@@ -15,7 +15,8 @@ Palette and fonts are CSS variables at the top of `marquee.css`: paper `#f3e9d2`
 
 `#/plans` (ranked plan tickets; until plans exist, the four trip days with screening counts) ·
 `#/plan/<id>` (timeline: films, free-time gaps labelled lunch/dinner by overlap with 11:30-14:30 and
-16:30-20:00) · `#/films` (filters: trip days / all / one day, title search, genre) · `#/film/<ST id>` ·
+16:30-20:00) · `#/films` (filters: trip days / all / one day, title search, genre; sort: A to Z, highest score with
+Unrated films always last, earliest showtime within the chosen days; filters and sort persist while the tab is open) · `#/film/<ST id>` ·
 `#/schedule[/<YYYY-MM-DD>]` (one day, grouped by building).
 
 ## Score and why

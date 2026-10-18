@@ -134,3 +134,7 @@ a.ticket:active { background: #f3ead2; }
 .tabs a { flex: 1; max-width: 13rem; text-align: center; padding: 8px 0 10px; font-size: 11px; color: var(--muted); text-decoration: none; }
 .tabs svg { display: block; width: 24px; height: 24px; margin: 0 auto 2px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .tabs a.on { color: var(--red); }
+
+.countrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 2px 0 8px; }
+.countrow .count { margin: 0; }
+.sortsel { font: 13px var(--sans); padding: 4px 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink); }
