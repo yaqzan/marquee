@@ -1,0 +1,38 @@
+# Shared defaults. Personal settings go in config.local.toml (gitignored), merged over this file.
+
+[festival]
+slug = "wiff-2026"
+name = "Windsor International Film Festival 2026"
+starts_on = "2026-10-29"
+ends_on = "2026-11-08"
+site_url = "https://windsorfilmfestival.com"
+# The page whose HTML carries the public nonce the schedule panel uses.
+schedule_page = "/festival/how-to-wiff/?open-film-schedule=true"
+ajax_path = "/wp-admin/admin-ajax.php"
+# One request with this date returns every film and session of the festival.
+ajax_action = "get_film_schedule_films"
+ajax_session_date = "all-festival-films"
+
+[fetch]
+user_agent = "Marquee/0.1 (personal festival planner; github.com/yaqzan/marquee)"
+timeout_s = 60
+# `fetch` refuses to hit the site again inside this window unless --force.
+min_interval_minutes = 30
+
+# WIFF lists passes and ticket packs in the same feed, on fake "screens" (PASSHOLDER ...). A row is a
+# product, not a film, when its genre matches AND its title matches; products are skipped at import.
+[products]
+genre = "Alternative Content"
+title_re = "(?i)\\b(pass|ticket)\\b"
+
+[plan]
+# The days a day trip is built for (weekends only).
+candidate_days = ["2026-10-31", "2026-11-01", "2026-11-07", "2026-11-08"]
+
+# Screen name (as WIFF reports it) -> building. Buildings are what walking time is measured between;
+# the two Capitol screens share one.
+[venues]
+"Kelly - Capitol Theatre" = "Capitol Theatre"
+"OLG Pentastar - Capitol" = "Capitol Theatre"
+"Armouries - Sheehan Hall" = "Armouries"
+"Chrysler St. Clair Centre" = "Chrysler Theatre"

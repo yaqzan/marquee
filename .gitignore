@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+# Run state: database, raw schedule snapshots
+marquee/state/
+ops/windows/logs/
+# Machine config (holds the tunnel UUID)
+ops/cloudflared-config.yml
+# Your own settings: taste sources, API keys (template: config.local.example.toml)
+config.local.toml

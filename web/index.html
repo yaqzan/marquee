@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marquee</title>
+<style>
+  :root { --bg: #fafaf7; --fg: #1b1b1b; --muted: #6b6b66; --line: #dcdcd4; --accent: #9b2c2c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151514; --fg: #ececE6; --muted: #9a9a92; --line: #333330; --accent: #e07070; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 52rem; margin: 0 auto; padding: 2rem 16px; }
+  h1 { margin: 0 0 .25rem; letter-spacing: .04em; }
+  p.sub { margin: 0 0 1.5rem; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); }
+  tr.cand td:first-child { color: var(--accent); font-weight: 600; }
+  code { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Marquee</h1>
+  <p class="sub" id="sub">Loading</p>
+  <table>
+    <thead><tr><th>Day</th><th>Films</th><th>Sessions</th></tr></thead>
+    <tbody id="days"></tbody>
+  </table>
+  <p class="sub">The API is live: <code>/api/festival</code>, <code>/api/films</code>, <code>/api/sessions?day=YYYY-MM-DD</code>, <code>/api/plans</code>. The browsing interface is next.</p>
+</main>
+<script>
+fetch('/api/festival').then(r => r.json()).then(d => {
+  const f = d.festival;
+  document.getElementById('sub').textContent = f ? f.name + ', ' + f.starts_on + ' to ' + f.ends_on : 'No data yet';
+  const body = document.getElementById('days');
+  for (const day of d.days || []) {
+    const tr = document.createElement('tr');
+    if (day.candidate) tr.className = 'cand';
+    for (const v of [day.day, day.films, day.sessions]) {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+}).catch(() => { document.getElementById('sub').textContent = 'Could not load the schedule'; });
+</script>
+</body>
+</html>
