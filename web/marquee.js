@@ -108,6 +108,27 @@ function whyCard(w) {
     parts);
 }
 
+// Rotten Tomatoes style badges: tomato for critics, popcorn for audiences. The server says fresh or not.
+// (RT's own audience score has no open source, so the audience badge is IMDb, else TMDB, and says which.)
+function badges(o, big) {
+  const size = big ? 30 : 18;
+  const one = (kind, fresh, value, label, title) => h('span', { class: 'bdg', title },
+    h('img', { src: `/icons/${kind}-${fresh ? (kind === 'tomato' ? 'fresh' : 'full') : (kind === 'tomato' ? 'rotten' : 'spilled')}.svg?v=1`,
+      alt: '', width: size, height: size }),
+    h('span', { class: 'bdg-n' }, value + '%'),
+    big ? h('span', { class: 'bdg-l' }, label) : null);
+  const bits = [];
+  if (o.rt) bits.push(one('tomato', o.rt.fresh, o.rt.score, 'Critics', 'Rotten Tomatoes critics ' + o.rt.score + '%'));
+  if (o.audience) bits.push(one('popcorn', o.audience.fresh, o.audience.score, 'Audience (' + o.audience.source + ')', 'Audience score from ' + o.audience.source));
+  return bits.length ? h('div', { class: 'bdgs' + (big ? ' big' : '') }, bits) : null;
+}
+
+function poster(src, title, cls) {
+  return src
+    ? h('img', { class: 'poster ' + cls, src, alt: '', loading: 'lazy' })
+    : h('div', { class: 'poster none ' + cls, 'aria-hidden': 'true' }, (title || '?').trim().charAt(0).toUpperCase());
+}
+
 const cleanTags = tags => (tags || []).map(t => t.label).filter(l => l && !/^\d+$/.test(l));
 
 const cache = {};
@@ -183,12 +204,15 @@ async function planView(id) {
           `${fmtDur(gap)} free${lunch ? ': lunch' : dinner ? ': dinner' : ''}`)));
       }
     }
-    events.push(h('div', { class: 'ev' },
-      h('div', { class: 'tm' }, `${fmtMin(st.min)} – ${fmtMin(end)}`),
-      h('h3', null, h('a', { href: '#/film/' + it.film_id }, titleCase(it.title))),
-      h('p', { class: 'meta' }, it.venue),
-      it.why ? h('p', { class: 'meta why-line' }, `Score ${Math.round(it.why.score)}`, reasonLine(it.why) ? ' · ' + reasonLine(it.why) : '') : null,
-      it.note ? h('p', { class: 'meta' }, it.note) : null));
+    events.push(h('div', { class: 'ev' }, h('div', { class: 'evrow' },
+      poster(it.poster, titleCase(it.title), 'xs'),
+      h('div', { class: 'evbody' },
+        h('div', { class: 'tm' }, `${fmtMin(st.min)} \u2013 ${fmtMin(end)}`),
+        h('h3', null, h('a', { href: '#/film/' + it.film_id }, titleCase(it.title))),
+        h('p', { class: 'meta' }, it.venue),
+        badges(it, false),
+        it.why ? h('p', { class: 'meta why-line' }, `Score ${Math.round(it.why.score)}`, reasonLine(it.why) ? ' \u00b7 ' + reasonLine(it.why) : '') : null,
+        it.note ? h('p', { class: 'meta' }, it.note) : null))));
   });
   screen(
     h('a', { class: 'back', href: '#/plans' }, '← Plans'),
@@ -242,9 +266,11 @@ function filmCard(f, title, days) {
   if (shown.length > 4) chips.push(h('span', { class: 'sess' }, `+${shown.length - 4} more`));
   const meta = [f.runtime_min ? `${f.runtime_min} min` : '', places(f.country), (f.genre || '').trim()].filter(Boolean).join(' · ');
   return h('a', { class: 'film', href: '#/film/' + f.id },
-    h('h3', null, h('span', null, title), f.confidence >= 0.15 ? h('span', { class: 'scorechip', title: 'Score' }, Math.round(f.score)) : null),
-    h('p', { class: 'meta' }, meta), chips,
-    cleanTags(f.tags).slice(0, 3).map(t => h('span', { class: 'tag' }, titleCase(t))));
+    poster(f.poster, title, 'sm'),
+    h('div', { class: 'film-body' },
+      h('h3', null, h('span', null, title), f.confidence >= 0.15 ? h('span', { class: 'scorechip', title: 'Score' }, Math.round(f.score)) : null),
+      h('p', { class: 'meta' }, meta), badges(f, false), chips,
+      cleanTags(f.tags).slice(0, 3).map(t => h('span', { class: 'tag' }, titleCase(t)))));
 }
 
 async function filmView(id) {
@@ -261,9 +287,13 @@ async function filmView(id) {
   screen(
     h('a', { class: 'back', href: '#/films' }, '← Films'),
     h('div', { class: 'detail' },
-      h('h2', null, titleCase(f.title)),
-      h('p', { class: 'meta' }, meta),
-      cleanTags(f.tags).map(t => h('span', { class: 'tag' }, titleCase(t))),
+      h('div', { class: 'hero' },
+        poster(f.poster, titleCase(f.title), 'lg'),
+        h('div', { class: 'hero-body' },
+          h('h2', null, titleCase(f.title)),
+          h('p', { class: 'meta' }, meta),
+          badges(f, true),
+          cleanTags(f.tags).map(t => h('span', { class: 'tag' }, titleCase(t))))),
       f.director ? h('p', { class: 'meta' }, 'Directed by ' + f.director) : null,
       f.cast && f.cast.length ? h('p', { class: 'meta' }, 'With ' + f.cast.join(', ')) : null,
       f.synopsis ? syn : null, long ? more : null,

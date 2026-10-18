@@ -98,3 +98,17 @@ omdb_daily_budget = 900         # the free key allows 1000 a day; a walk cut sho
 retry_none_days = 7             # a film TMDB could not match is looked up again after this long
 runtime_tolerance_min = 3       # WIFF runtime vs TMDB runtime for a "runtime" match
 min_year = 2024                 # candidates older than this are not festival new releases
+
+[posters]
+# WIFF's own poster for each film (the Veezi image in the schedule feed), cached once and shrunk.
+width = 360                     # px; shown at most ~120 px wide, so 3x for sharp phone screens
+quality = 82
+sleep_s = 0.4                   # between downloads
+max_bytes = 12000000            # refuse anything larger than this
+
+[display]
+# The audience badge uses IMDb when it has enough votes, else TMDB. (Rotten Tomatoes' own audience score is
+# not available from any open API: OMDb returns N/A for it.)
+audience_imdb_min_votes = 100
+audience_tmdb_min_votes = 20
+fresh_at = 60                   # percent at or above which a tomato / popcorn icon is the "fresh" one

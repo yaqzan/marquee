@@ -15,11 +15,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 from . import DB_PATH, WEB_DIR, __version__, load_config, store
+from .posters import POSTER_DIR
 
 HOST, PORT = "127.0.0.1", 5007
 STALE_HOURS = 72  # a schedule older than this means refreshes are failing (WIFF edits it during the run)
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 FILM_RE = re.compile(r"^ST\d+$")
+PNG_MAGIC = bytes([0x89, 0x50, 0x4E, 0x47])
 SOURCE_NAMES = {"metacritic": "Metacritic", "rt": "Rotten Tomatoes", "imdb": "IMDb", "tmdb": "TMDB"}
 
 
@@ -46,6 +48,25 @@ def health() -> dict:
     if row:
         age = (datetime.now().astimezone() - datetime.fromisoformat(row[0])).total_seconds() / 3600
         out.update(last_fetch=row[0], age_hours=round(age, 1), stale=age >= STALE_HOURS)
+    return out
+
+
+def media(c, cfg: dict, film_ids: list[str] | None = None) -> dict[str, dict]:
+    """Per film: the Rotten Tomatoes critics score, an audience score (IMDb, else TMDB), each with its fresh flag,
+    and the poster URL."""
+    d = cfg["display"]
+    out: dict[str, dict] = {}
+    for r in c.execute("SELECT film_id, source, score, votes FROM film_rating"):
+        m = out.setdefault(r["film_id"], {"rt": None, "audience": None, "poster": None})
+        fresh = round(r["score"]) >= d["fresh_at"]
+        if r["source"] == "rt":
+            m["rt"] = {"score": round(r["score"]), "fresh": fresh}
+        elif r["source"] == "imdb" and (r["votes"] or 0) >= d["audience_imdb_min_votes"]:
+            m["audience"] = {"score": round(r["score"]), "source": "IMDb", "votes": r["votes"], "fresh": fresh}
+        elif r["source"] == "tmdb" and (r["votes"] or 0) >= d["audience_tmdb_min_votes"] and not (m["audience"] and m["audience"]["source"] == "IMDb"):
+            m["audience"] = {"score": round(r["score"]), "source": "TMDB", "votes": r["votes"], "fresh": fresh}
+    for r in c.execute("SELECT film_id, sha8 FROM film_poster"):
+        out.setdefault(r["film_id"], {"rt": None, "audience": None, "poster": None})["poster"] = f"/poster/{r['film_id']}?v={r['sha8']}"
     return out
 
 
@@ -118,7 +139,10 @@ def films(c, q: dict) -> dict:
                        "LEFT JOIN tag g ON g.code=t.code"):
         tags.setdefault(r["film_id"], []).append({"code": r["code"], "label": r["label"]})
     sc = {x["film_id"]: x for x in c.execute("SELECT film_id, score, confidence FROM film_score")}
+    md = media(c, load_config())
     for r in rows:
+        m = md.get(r["id"], {})
+        r["rt"], r["audience"], r["poster"] = m.get("rt"), m.get("audience"), m.get("poster")
         r["score"] = sc[r["id"]]["score"] if r["id"] in sc else None
         r["confidence"] = sc[r["id"]]["confidence"] if r["id"] in sc else None
         r["tags"] = tags.get(r["id"], [])
@@ -139,7 +163,10 @@ def film(c, fid: str) -> dict | None:
     out["director"] = meta["director"] if meta else None
     out["cast"] = json.loads(meta["cast_json"] or "[]") if meta else []
     out["year"] = meta["year"] if meta else None
-    out["why"] = score_view(c, load_config(), fid)
+    cfg = load_config()
+    out["why"] = score_view(c, cfg, fid)
+    m = media(c, cfg).get(fid, {})
+    out["rt"], out["audience"], out["poster"] = m.get("rt"), m.get("audience"), m.get("poster")
     out["sessions"] = _rows(c, "SELECT s.id AS session_id, s.starts_at, s.status, v.name AS venue, v.building "
                                "FROM session s JOIN venue v ON v.screen_id=s.screen_id "
                                "WHERE s.film_id=? AND s.removed_at IS NULL ORDER BY s.starts_at", (fid,))
@@ -160,12 +187,15 @@ def plans(c, day: str | None) -> dict:
                    "ORDER BY p.rank", args)
     cfg = load_config()
     labels = {x["code"]: x["label"] for x in c.execute("SELECT code, label FROM tag")}
+    md = media(c, cfg)
     for p in out:
         p["items"] = _rows(c, f"SELECT i.position, i.note, {SESSION_COLS} FROM plan_item i "
                               "JOIN session s ON s.id=i.session_id JOIN film f ON f.id=s.film_id "
                               "JOIN venue v ON v.screen_id=s.screen_id WHERE i.plan_id=? ORDER BY i.position", (p["id"],))
         for it in p["items"]:
             it["why"] = score_view(c, cfg, it["film_id"], labels)
+            m = md.get(it["film_id"], {})
+            it["rt"], it["audience"], it["poster"] = m.get("rt"), m.get("audience"), m.get("poster")
     return {"plans": out}
 
 
@@ -208,11 +238,27 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, code: int, obj: dict):
         self._send(code, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8")
 
+    def _poster(self, film_id: str):
+        try:
+            with _conn() as c:
+                row = c.execute("SELECT file FROM film_poster WHERE film_id=?", (film_id,)).fetchone()
+        except sqlite3.Error:
+            row = None
+        f = (POSTER_DIR / row["file"]) if row else None
+        if not f or not f.is_file():
+            return self._send(404, b"Not found", "text/plain; charset=utf-8")
+        data = f.read_bytes()
+        ctype = "image/png" if data[:4] == PNG_MAGIC else "image/jpeg"
+        self._send(200, data, ctype, "public, max-age=604800")  # the URL carries ?v=<hash>, so a new poster busts it
+
     def do_GET(self):  # noqa: N802
         parts = urlsplit(self.path)
         path = parts.path
         if path == "/api/health":
             return self._json(200, health())
+        m = re.match(r"^/poster/(ST\d+)$", path)
+        if m:
+            return self._poster(m.group(1))
         if path.startswith("/api/"):
             code, obj = api(path, parse_qs(parts.query))
             return self._json(code, obj)

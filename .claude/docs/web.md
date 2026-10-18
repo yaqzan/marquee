@@ -28,6 +28,22 @@ in marquee.js; low-weight sources are left out). Film cards show a score chip on
 tags-only 55 is never presented as a verdict. The server builds the breakdown (`serve.score_view`) from
 `film_score.parts`; the UI never recomputes a score. The film page also shows director and top-billed cast.
 
+## Posters and badges
+
+- **Posters**: WIFF's own poster per film (the Veezi image in the schedule feed, `film.poster_url`). The originals
+  run up to 4 MB, so `marquee posters` downloads each once, shrinks it to a 360 px progressive JPEG with Pillow
+  (~35 KB; 8.4 MB for all 236) into `marquee/state/posters/` (gitignored), and the server serves it at
+  `/poster/<film id>?v=<hash>` with a week of cache (the hash busts it). Walk once, refetch only when the feed's
+  URL changes; a 403/429 stops the run. Without Pillow the 125 px standard variant is stored instead. A missing
+  poster renders a lettered paper placeholder, never a broken image. Shown on film cards, the film page and
+  plan timelines.
+- **Badges**: Rotten Tomatoes style, original icons in `web/icons/` (tomato-fresh, tomato-rotten, popcorn-full,
+  popcorn-spilled; not RT's artwork). Critics = the RT percent from OMDb. **Audience = IMDb (100+ votes), else
+  TMDB (20+), and the label says which**: RT's own audience score (Popcornmeter) has no open source (OMDb returns
+  N/A; scraping RT is off the table), so never present this as RT's. Fresh = at or above `[display] fresh_at`
+  (60); the server sets the `fresh` flag, the UI only picks the icon. 54 films have RT, 50 an audience score.
+- Footer credits OMDb and TMDB (TMDB's attribution terms) and says the posters are the festival's own.
+
 ## Rules
 
 - **Data goes in as DOM text only** (`h()` builds elements with `createTextNode`; no innerHTML on data).

@@ -3,6 +3,7 @@
 fetch    pull the WIFF schedule (2 requests), keep the raw snapshot, import into the database
 import   re-import a saved snapshot (marquee/state/raw/schedule-*.json), no network
 enrich   match films to TMDB and pull critic scores from OMDb (needs [keys] in config.local.toml)
+posters  cache each film's WIFF poster locally (resized); only new or changed ones are fetched
 backtest does critic score or a taste model predict the owner's Arbiter ranking? (Spearman)
 plan     score every film, then find and store the best lineup per candidate day (ranked)
 show     print what the database holds, per day and venue
@@ -16,7 +17,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import RAW_DIR, backtest, enrich, load_config, planner, score, store, taste, wiff
+from . import RAW_DIR, backtest, enrich, load_config, planner, posters, score, store, taste, wiff
 
 
 def cmd_fetch(args) -> int:
@@ -89,6 +90,15 @@ def cmd_enrich(args) -> int:
     return 0
 
 
+def cmd_posters(args) -> int:
+    st = posters.run(store.connect(), load_config(), limit=args.limit)
+    print(f"posters fetched {st['fetched']}, failed {st['failed']}" + ("" if st["pillow"] else " (no Pillow: stored the small variant)"))
+    if st["stopped"]:
+        print("stopped:", st["stopped"])
+        return 1
+    return 0
+
+
 def cmd_backtest(_args) -> int:
     cfg = load_config()
     gate = cfg["score"]["taste_min_rho"]
@@ -142,6 +152,9 @@ def main(argv=None) -> int:
     en = sub.add_parser("enrich")
     en.add_argument("--limit", type=int, help="look up at most this many new films this run")
     en.set_defaults(fn=cmd_enrich)
+    po = sub.add_parser("posters")
+    po.add_argument("--limit", type=int, help="fetch at most this many posters this run")
+    po.set_defaults(fn=cmd_posters)
     sub.add_parser("backtest").set_defaults(fn=cmd_backtest)
     pl = sub.add_parser("plan")
     pl.add_argument("--day", help="only this day (YYYY-MM-DD); other days' plans are replaced too, so omit normally")

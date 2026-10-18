@@ -30,7 +30,9 @@ Raw payloads are kept by content hash in `marquee/state/raw/` so any import can 
 
 `/api/health` (always 200), `/api/festival` (days with session counts, venues), `/api/films` (filters:
 `q`, `genre`, `country`, `tag`, `day`), `/api/films/<id>` (adds director, cast, year and `why`, the score breakdown), `/api/sessions?day=`,
-`/api/plans[?day=]` (each item carries `why` too). List rows carry `score` and `confidence`.
+`/api/plans[?day=]` (each item carries `why` too). Films (list, detail, plan items) carry `rt`, `audience` (each
+`{score, fresh}`, audience also `source`, `votes`) and `poster`; `/poster/<ST id>` serves the cached image.
+List rows carry `score` and `confidence`.
 
 ## Scoring (marquee/score.py, config [score])
 

@@ -101,3 +101,41 @@ await go('#/films');
 check('films list: score chips only on films with data', app.find(e => e.className === 'scorechip').length > 5, String(app.find(e => e.className === 'scorechip').length));
 t = await go('#/plan/' + planId);
 check('plan timeline: score and reasons under each film', (t.match(/Score \d+/g) || []).length === 3, t);
+
+// ---- posters and badges
+await go('#/films');
+const posterImgs = app.find(e => e.tag === 'img' && /(^| )poster( |$)/.test(e.className));
+check('films list: poster thumbnails served from /poster/', posterImgs.length > 10 && posterImgs.every(i => i.attrs.src.startsWith('/poster/')), String(posterImgs.length));
+const withBoth = allFilms.find(f => f.rt && f.audience);
+t = await go('#/film/' + withBoth.id);
+const icons = app.find(e => e.tag === 'img' && /^\/icons\//.test(e.attrs.src || '')).map(i => i.attrs.src);
+check('film page: tomato and popcorn badges with the right icons', icons.length === 2 &&
+  icons[0].includes(withBoth.rt.fresh ? 'tomato-fresh' : 'tomato-rotten') &&
+  icons[1].includes(withBoth.audience.fresh ? 'popcorn-full' : 'popcorn-spilled'), icons.join(' '));
+check('film page: labels say where the audience score is from', /Audience \((IMDb|TMDB)\)/.test(t) && t.includes('Critics'), t.slice(0, 400));
+const rotten = allFilms.find(f => f.rt && !f.rt.fresh);
+if (rotten) {
+  await go('#/film/' + rotten.id);
+  check('film page: a sub-60 critics score gets the rotten icon', app.find(e => e.tag === 'img' && (e.attrs.src || '').includes('tomato-rotten')).length === 1, '');
+}
+const res = await fetch(withBoth.poster);
+check('poster URL answers 200 image/jpeg', res.status === 200 && res.headers.get('content-type') === 'image/jpeg', res.status + ' ' + res.headers.get('content-type'));
+const noPoster = allFilms.find(f => !f.poster);
+if (noPoster) { await go('#/film/' + noPoster.id); check('film without a poster shows a lettered placeholder', app.find(e => /poster none/.test(e.className)).length === 1, ''); }
+t = await go('#/plan/' + planId);
+check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' && /poster xs/.test(e.className)).length === 3, '');
+
+// ---- placeholder when a poster is missing (every real film has one, so blank one in flight)
+{
+  const prev = globalThis.fetch;
+  globalThis.fetch = async (p, o) => {
+    const r = await prev(p, o);
+    if (p === '/api/films/' + withBoth.id) { const j = await r.json(); j.poster = null; return { ok: true, status: 200, json: async () => j }; }
+    return r;
+  };
+  await go('#/film/' + withBoth.id);
+  const ph = app.find(e => /poster none/.test(e.className));
+  check('missing poster: lettered placeholder, no broken image', ph.length === 1 && ph[0].text().trim().length === 1 &&
+    app.find(e => e.tag === 'img' && /^poster/.test(e.className)).length === 0, ph.map(e => e.text()).join('|'));
+  globalThis.fetch = prev;
+}

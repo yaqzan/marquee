@@ -18,6 +18,7 @@ take other festivals later. Read-only public site, no auth, no input surface.
 - `py -3.11 -m marquee import [file]`: re-import a saved snapshot (newest by default), no network.
 - `py -3.11 -m marquee plan`: score every film, pick the best lineup per candidate day, rank the days (writes `plan`).
 - `py -3.11 -m marquee enrich [--limit N]`: TMDB match (+ cast) + OMDb critic scores; needs `[keys]` in `config.local.toml`.
+- `py -3.11 -m marquee posters`: cache + shrink each film's WIFF poster (walk once; needs Pillow for the small JPEGs).
 - `py -3.11 -m marquee backtest`: cross-validated test of each taste/critic signal vs the owner's Arbiter ranking.
 - `py -3.11 -m marquee show`: counts per day and venue, last fetch.
 - `py -3.11 -m marquee serve`: site + API on 127.0.0.1:5007.

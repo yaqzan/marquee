@@ -89,6 +89,17 @@ CREATE TABLE IF NOT EXISTS film_rating (
     fetched_at TEXT NOT NULL,
     PRIMARY KEY (film_id, source)
 );
+-- Locally cached poster (resized JPEG) per film; src_url is what it was made from, so a changed URL refetches.
+CREATE TABLE IF NOT EXISTS film_poster (
+    film_id    TEXT PRIMARY KEY REFERENCES film(id) ON DELETE CASCADE,
+    src_url    TEXT NOT NULL,
+    file       TEXT NOT NULL,               -- name inside marquee/state/posters/
+    sha8       TEXT NOT NULL,               -- first 8 hex of the file hash, used to bust browser caches
+    width      INTEGER,
+    height     INTEGER,
+    fetched_at TEXT NOT NULL
+);
+
 -- The computed score and the parts it came from (rebuilt by `marquee plan`).
 CREATE TABLE IF NOT EXISTS film_score (
     film_id    TEXT PRIMARY KEY REFERENCES film(id) ON DELETE CASCADE,
