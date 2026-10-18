@@ -81,8 +81,13 @@ class TestScore(unittest.TestCase):
         self.assertLess(thin["score"] - 50, 1.0)
         self.assertLess(thin["confidence"], 0.05)
 
-    def test_taste_nudge_is_off_by_default(self):
-        self.assertEqual(score.score_film([], [], CFG, taste=1.0)["score"], 50.0)
+    def test_taste_nudge_is_bounded_and_can_be_switched_off(self):
+        top = CFG["score"]["taste_nudge_max"]
+        self.assertEqual(score.score_film([], [], CFG, taste=1.0)["score"], 50.0 + top)
+        self.assertEqual(score.score_film([], [], CFG, taste=9.0)["score"], 50.0 + top)   # clipped to +1
+        self.assertEqual(score.score_film([], [], CFG, taste=-9.0)["score"], 50.0 - top)
+        off = {**CFG, "score": {**CFG["score"], "taste_nudge_max": 0.0}}
+        self.assertEqual(score.score_film([], [], off, taste=1.0)["score"], 50.0)
 
 
 if __name__ == "__main__":

@@ -39,12 +39,18 @@ Film, Premium). Sources (Metacritic, RT, IMDb, TMDB) carry configured weights sc
 No critic data = the pedigree prior alone, `confidence` 0, and the plan summary says "ranked on festival tags
 only". Results are in `film_score` (rebuilt by `marquee plan`).
 
-**Backtest finding (2026-10-18, owner's 211 movies + 21 docs in Arbiter, target = Arbiter Elo):** Plex critic
-score Spearman 0.10 (n=213), audience 0.07, genre/country/decade taste model (leave-one-out) -0.03, and adding
-it to the critic score only lowered the fit. Neither critics nor coarse taste features are validated on this
-owner, so `taste_nudge_max` is 0 and nothing unvalidated gets weight. Retry the taste model with TMDB directors
-and keywords once enrichment has run (gate: `taste_min_rho`). Caveat: Elo comes from few rounds and seeded
-tiers, and the owner watched a pre-filtered set, so range restriction shrinks any correlation.
+**Backtest (`marquee backtest`; 2026-10-18; target = Arbiter Elo for the owner's ~230 ranked movies and docs;
+10-fold CV, 5 shuffles):** Plex critic score rho 0.10, audience 0.07, genre/country/decade 0.02, keywords 0.05,
+director 0.20, top-billed cast 0.22, **director + cast 0.26**. Only the people signal clears `taste_min_rho`
+(0.15), so it alone feeds the taste nudge (`taste.py`: per-person shrunk mean Elo, k=3, scaled by
+`taste_scale_elo`, bounded by `taste_nudge_max` = 5 points). Coverage is narrow: 19 of 184 matched WIFF films
+share a person with something ranked, so the nudge moves those by about -3 to +2.5 points and nothing else.
+An early leave-one-out run reported -0.03 for genre/country/decade; that number was partly an artifact of
+LOO on category means (the held-out film's own score is subtracted from its group), which is why the
+validation is cross-validation. Caveats: Elo comes from few rounds and seeded tiers, the owner's watch set is
+pre-filtered, and rho on ~230 titles has a standard error of ~0.07. Re-run after every batch of Arbiter swipes;
+set `taste_nudge_max` to 0 if the director+cast row ever drops below the gate. Critics are weak on this owner's
+taste, so plans lean on festival pedigree and consensus where critic data exists, not on a validated predictor.
 
 ## Planner (marquee/planner.py, config [plan])
 
@@ -60,7 +66,9 @@ is premium on a trip day. All sessions are "Open" in the feed, so sold-out is un
 
 `marquee enrich` needs `[keys] tmdb`/`omdb` in `config.local.toml` (template: `config.local.example.toml`).
 TMDB title search, candidates >= 2024, matched on runtime (+/- 3 min) since WIFF has no year; a lone exact title
-is a weaker 'title' match; else 'none' (retried after 7 days). Stores directors, imdb id, TMDB score, then OMDb
+is a weaker 'title' match; else 'none' (retried after 7 days). Stores directors, top-billed cast, imdb id, TMDB score, then OMDb
 for Metacritic / RT / IMDb under its own daily budget (900). Walks once, then only new films. A 429 or rejected
-key stops the run. Written against the documented API shapes and tested with fake responses only: the first
-real run (after the owner adds keys) is the live check; read its unmatched list.
+key stops the run. First real run 2026-10-18: 184 of 236 matched (164 by runtime, 20 by title only), 52 'none' (local shorts
+programs, award screenings, small Canadian titles TMDB does not list); critic scores found for 90 films (RT 54,
+Metacritic 30, IMDb 74; TMDB audience scores mostly have too few votes to count). Unmatched films are retried
+after 7 days. The OMDb free key (1000/day) needs the emailed activation link clicked first.

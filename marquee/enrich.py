@@ -73,7 +73,7 @@ def tmdb_get(path: str, key: str, getj, **params) -> dict:
 def match_tmdb(film: dict, key: str, cfg: dict, getj=get_json, sleep=lambda s: None) -> dict:
     """-> {match, tmdb_id, imdb_id, director, year, tmdb_rating, tmdb_votes, note}"""
     e = cfg["enrich"]
-    out = {"match": "none", "tmdb_id": None, "imdb_id": None, "director": None, "year": None,
+    out = {"match": "none", "tmdb_id": None, "imdb_id": None, "director": None, "cast": [], "year": None,
            "tmdb_rating": None, "tmdb_votes": None, "note": None}
     res = tmdb_get("/search/movie", key, getj, query=search_title(film["title"]), include_adult="false").get("results", [])
     cands = [r for r in res if (r.get("release_date") or "0000")[:4].isdigit()
@@ -104,10 +104,15 @@ def match_tmdb(film: dict, key: str, cfg: dict, getj=get_json, sleep=lambda s: N
     out.update(match=how, tmdb_id=pick["id"],
                imdb_id=d.get("imdb_id") or (d.get("external_ids") or {}).get("imdb_id") or None,
                director=", ".join(c["name"] for c in crew if c.get("job") == "Director") or None,
+               cast=top_cast(d),
                year=int(pick["release_date"][:4]),
                tmdb_rating=round(d["vote_average"] * 10, 1) if d.get("vote_count") else None,
                tmdb_votes=d.get("vote_count"))
     return out
+
+
+def top_cast(details: dict, n: int = 4) -> list[str]:
+    return [c["name"] for c in ((details.get("credits") or {}).get("cast") or [])[:n]]
 
 
 def parse_omdb(body: dict) -> list[dict]:
@@ -146,7 +151,7 @@ def run(conn, cfg: dict, limit: int | None = None, getj=get_json, sleep=time.sle
     if not keys.get("tmdb") or not keys.get("omdb"):
         raise SystemExit("Add your keys to config.local.toml:\n[keys]\ntmdb = \"...\"\nomdb = \"...\"")
     e = cfg["enrich"]
-    stats = {"matched": 0, "unmatched": 0, "omdb": 0, "stopped": None}
+    stats = {"matched": 0, "unmatched": 0, "omdb": 0, "backfilled": 0, "stopped": None}
     cutoff = (datetime.now().astimezone() - timedelta(days=e["retry_none_days"])).isoformat(timespec="seconds")
     todo = conn.execute(
         "SELECT f.id, f.title, f.runtime_min FROM film f LEFT JOIN film_meta m ON m.film_id = f.id "
@@ -157,14 +162,23 @@ def run(conn, cfg: dict, limit: int | None = None, getj=get_json, sleep=time.sle
             sleep(e["sleep_s"])
             m = match_tmdb(dict(f), keys["tmdb"], cfg, getj, sleep)
             at = now()
-            conn.execute("INSERT INTO film_meta(film_id, tmdb_id, imdb_id, director, year, match, note, fetched_at) "
-                         "VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(film_id) DO UPDATE SET tmdb_id=excluded.tmdb_id, "
-                         "imdb_id=excluded.imdb_id, director=excluded.director, year=excluded.year, "
-                         "match=excluded.match, note=excluded.note, fetched_at=excluded.fetched_at",
-                         (f["id"], m["tmdb_id"], m["imdb_id"], m["director"], m["year"], m["match"], m["note"], at))
+            conn.execute("INSERT INTO film_meta(film_id, tmdb_id, imdb_id, director, cast_json, year, match, note, fetched_at) "
+                         "VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(film_id) DO UPDATE SET tmdb_id=excluded.tmdb_id, "
+                         "imdb_id=excluded.imdb_id, director=excluded.director, cast_json=excluded.cast_json, "
+                         "year=excluded.year, match=excluded.match, note=excluded.note, fetched_at=excluded.fetched_at",
+                         (f["id"], m["tmdb_id"], m["imdb_id"], m["director"], json.dumps(m["cast"]), m["year"],
+                          m["match"], m["note"], at))
             if m["tmdb_rating"] is not None:
                 _store_rating(conn, f["id"], {"source": "tmdb", "score": m["tmdb_rating"], "votes": m["tmdb_votes"]}, at)
             stats["matched" if m["match"] != "none" else "unmatched"] += 1
+            conn.commit()
+        # Films matched before cast was stored: one credits call each, once.
+        for b in conn.execute("SELECT film_id, tmdb_id FROM film_meta WHERE match != 'none' AND tmdb_id IS NOT NULL "
+                              "AND cast_json IS NULL").fetchall():
+            sleep(e["sleep_s"])
+            d = tmdb_get(f"/movie/{b['tmdb_id']}", keys["tmdb"], getj, append_to_response="credits")
+            conn.execute("UPDATE film_meta SET cast_json = ? WHERE film_id = ?", (json.dumps(top_cast(d)), b["film_id"]))
+            stats["backfilled"] += 1
             conn.commit()
         used = 0
         pending = conn.execute("SELECT m.film_id, m.imdb_id FROM film_meta m JOIN film f ON f.id = m.film_id "

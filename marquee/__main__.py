@@ -16,7 +16,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import RAW_DIR, backtest, enrich, load_config, planner, score, store, wiff
+from . import RAW_DIR, backtest, enrich, load_config, planner, score, store, taste, wiff
 
 
 def cmd_fetch(args) -> int:
@@ -82,7 +82,7 @@ def cmd_enrich(args) -> int:
     cfg = load_config()
     conn = store.connect()
     st = enrich.run(conn, cfg, limit=args.limit)
-    print(f"matched {st['matched']}, unmatched {st['unmatched']}, OMDb lookups {st['omdb']}")
+    print(f"matched {st['matched']}, unmatched {st['unmatched']}, cast backfilled {st['backfilled']}, OMDb lookups {st['omdb']}")
     if st["stopped"]:
         print("stopped:", st["stopped"])
         return 1
@@ -92,15 +92,24 @@ def cmd_enrich(args) -> int:
 def cmd_backtest(_args) -> int:
     cfg = load_config()
     gate = cfg["score"]["taste_min_rho"]
-    for label, rho, n in backtest.run(cfg):
-        print(f"{label:<52} rho {rho:6.3f}  n={n}  " + ("clears the gate" if rho >= gate else f"below {gate}"))
+    for label, rho, n, used in backtest.run(cfg):
+        print(f"{label:<40} rho {rho:6.3f}  n={n:<4} " + ("clears the gate" if rho >= gate else f"below {gate}")
+              + ("   <- drives the taste nudge" if used else ""))
+    print(f"taste_nudge_max is {cfg['score']['taste_nudge_max']} (config [score]); keep it above 0 only while the people signal clears the gate")
     return 0
 
 
 def cmd_plan(args) -> int:
     cfg = load_config()
     conn = store.connect()
-    print(f"scored {score.score_all(conn, cfg)} films")
+    fits: dict = {}
+    if cfg["score"]["taste_nudge_max"]:
+        try:  # Arbiter is read live; if it is unreachable the plan is built without the taste nudge
+            fits = taste.wiff_fits(conn, cfg, taste.fit(taste.ranked(cfg)))
+            print(f"taste: {len(fits)} films share a director or lead actor with something you ranked")
+        except Exception as e:  # noqa: BLE001
+            print(f"taste: skipped ({e})")
+    print(f"scored {score.score_all(conn, cfg, fits)} films")
     days = planner.build(conn, cfg, [args.day] if args.day else None)
     conn.commit()
     if not days:

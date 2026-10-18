@@ -49,13 +49,14 @@ premium_tag_code = "0000000115"
 [score]
 # score = (sum of source scores weighted + prior_weight * prior) / (sum of weights + prior_weight), 0-100.
 # Thin or missing critic data therefore shrinks toward the pedigree prior, and `confidence` is the share of
-# weight that came from real sources. Nothing here is validated against the owner's taste yet (backtest,
-# 2026-10-18: Plex critic score vs Arbiter Elo rho 0.10; genre/country/decade taste rho -0.03), so
-# taste_nudge_max stays 0 until a feature set backtests above taste_min_rho.
+# weight that came from real sources. Backtest (`marquee backtest`, 10-fold CV against the owner's Arbiter Elo,
+# 2026-10-18): Plex critic score rho 0.10, genre/country/decade 0.02, director+cast 0.26. Only the people
+# signal clears taste_min_rho, so only it feeds the bounded taste nudge.
 prior = 50
 prior_weight = 2.0
 diversity_weight = 6.0          # points off a lineup per unit of mean pairwise similarity (0-1)
-taste_nudge_max = 0.0
+taste_nudge_max = 5.0           # points added at a taste fit of +1 (and taken off at -1); 0 switches taste off
+taste_scale_elo = 100           # a person's shrunk mean Elo this far above/below the owner's mean = fit +/-1
 taste_min_rho = 0.15
 
 # Points added to the prior for each WIFF category tag a film carries (festival pedigree).

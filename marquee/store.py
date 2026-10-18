@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS film_meta (
     tmdb_id    INTEGER,
     imdb_id    TEXT,
     director   TEXT,
+    cast_json  TEXT,                        -- JSON list: top-billed cast names (taste signal)
     year       INTEGER,
     match      TEXT NOT NULL,               -- 'runtime', 'title', 'none' (how the TMDB match was made)
     note       TEXT,
@@ -151,4 +152,8 @@ def connect(path: Path = DB_PATH, readonly: bool = False) -> sqlite3.Connection:
         conn.executescript(SCHEMA)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    if not readonly:  # columns added after a database was first created
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(film_meta)")}
+        if "cast_json" not in cols:
+            conn.execute("ALTER TABLE film_meta ADD COLUMN cast_json TEXT")
     return conn

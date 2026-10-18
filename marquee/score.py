@@ -5,7 +5,8 @@ confidence = sum(w_i) / (sum(w_i) + prior_weight)
 
 With no critic data the score is just P and confidence is 0 ("unrated" on the site). A source's weight is
 its configured weight times votes / (votes + half_votes), so a score from twelve IMDb votes counts for
-almost nothing. The taste nudge is bounded by `taste_nudge_max` (0 until a feature set backtests).
+almost nothing. The taste nudge is bounded by `taste_nudge_max` and applies only to films with a taste fit
+(a director or top-billed actor the owner has ranked films for; see taste.py).
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ def source_weight(source: str, votes: int | None, cfg: dict) -> float:
     return s["weight"] * trust
 
 
-def score_film(codes: list[str], ratings: list[dict], cfg: dict, taste: float = 0.0) -> dict:
+def score_film(codes: list[str], ratings: list[dict], cfg: dict, taste: float = 0.0, because: list[str] | None = None) -> dict:
     sc = cfg["score"]
     points, hit = pedigree(codes, cfg)
     prior = sc["prior"] + points
@@ -46,10 +47,11 @@ def score_film(codes: list[str], ratings: list[dict], cfg: dict, taste: float = 
     base = (ssum + pw * prior) / (wsum + pw)
     nudge = max(-1.0, min(1.0, taste)) * sc["taste_nudge_max"]
     return {"score": round(base + nudge, 2), "confidence": round(wsum / (wsum + pw), 3),
-            "parts": {"prior": prior, "pedigree_codes": hit, "sources": used, "taste_nudge": round(nudge, 2)}}
+            "parts": {"prior": prior, "pedigree_codes": hit, "sources": used, "taste_nudge": round(nudge, 2),
+                      "taste_because": because or []}}
 
 
-def score_all(conn, cfg: dict) -> int:
+def score_all(conn, cfg: dict, taste: dict | None = None) -> int:
     """(Re)compute film_score for every film still in the feed. Scores are derived, so they are rebuilt freely."""
     codes: dict[str, list[str]] = {}
     for r in conn.execute("SELECT film_id, code FROM film_tag"):
@@ -60,7 +62,9 @@ def score_all(conn, cfg: dict) -> int:
     at = now()
     n = 0
     for f in conn.execute("SELECT id FROM film WHERE removed_at IS NULL").fetchall():
-        res = score_film(codes.get(f["id"], []), ratings.get(f["id"], []), cfg)
+        t = (taste or {}).get(f["id"])
+        res = score_film(codes.get(f["id"], []), ratings.get(f["id"], []), cfg,
+                         taste=t["fit"] if t else 0.0, because=t["because"] if t else None)
         conn.execute("INSERT INTO film_score(film_id, score, confidence, parts, scored_at) VALUES (?,?,?,?,?) "
                      "ON CONFLICT(film_id) DO UPDATE SET score=excluded.score, confidence=excluded.confidence, "
                      "parts=excluded.parts, scored_at=excluded.scored_at",
