@@ -172,7 +172,8 @@ async function plansView() {
     return screen(
       h('h2', null, 'Your best days'),
       h('p', { class: 'note' }, 'Ranked across your trip days.'),
-      plans.plans.map((p, i) => planTicket(p, i === 0)));
+      plans.plans.map((p, i) => planTicket(p, i === 0)),
+      optionLinks(fest));
   }
   const trip = fest.days.filter(d => d.candidate);
   screen(
@@ -184,7 +185,15 @@ async function plansView() {
         h('p', { class: 'line' }, `${d.films} films across ${d.sessions} screenings`)),
       h('div', { class: 'stub' },
         h('div', { class: 'big' }, d.sessions),
-        h('div', { class: 'cap' }, 'screenings')))));
+        h('div', { class: 'cap' }, 'screenings')))),
+    optionLinks(fest));
+}
+
+function optionLinks(fest) {
+  return [
+    h('h2', null, 'See every option'),
+    h('p', { class: 'note' }, 'All the film combinations that work for a day, with the paths that lead to the same choices joined up.'),
+    h('div', { class: 'chips' }, fest.days.filter(d => d.candidate).map(d => h('a', { class: 'chip trip', href: '#/paths/' + d.day }, fmtDay(d.day))))];
 }
 
 function planTicket(p, top) {
@@ -233,8 +242,153 @@ async function planView(id) {
     h('a', { class: 'back', href: '#/plans' }, '← Plans'),
     h('h2', null, fmtDay(p.day)),
     h('p', { class: 'note' }, [`#${p.rank}`, p.cost_cents != null ? money(p.cost_cents) : ''].filter(Boolean).join(' · ')),
+    h('a', { class: 'back', href: '#/paths/' + p.day }, 'See every option for this day →'),
     h('div', { class: 'tl' }, events),
     p.summary ? h('div', { class: 'why' }, p.summary) : null);
+}
+
+// ---------------------------------------------------------------- every option (branching view)
+
+// A day's valid lineups (best first) drawn as rows of poster tiles, one row per film slot. Lines join the films
+// that can follow each other. Films that lead to exactly the same next films share a dot: the paths merge there.
+// Picking a film (or moving the "free from" time) narrows the lineups, so forks and merges are worked out
+// from what is still live. The server only supplies lineups and sessions.
+const pathState = {};
+const BCOL = ['#7a2f22', '#a8741a', '#3d5a6c', '#5a6b3a'];
+const SLOTS = ['First film', 'Second film', 'Third film'];
+let relayout = null;
+
+function svgEl(tag, attrs) {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  return e;
+}
+
+async function pathsView(dayArg) {
+  const fest = await api('/api/festival');
+  const trip = fest.days.filter(d => d.candidate).map(d => d.day);
+  const day = trip.includes(dayArg) ? dayArg : trip[0];
+  const data = await api('/api/paths?day=' + day);
+  const nodes = Object.fromEntries(data.nodes.map(n => [n.session_id, n]));
+  const buildings = [...new Set(data.nodes.map(n => n.building))].sort();
+  const bcol = b => BCOL[buildings.indexOf(b) % BCOL.length];
+  const st = pathState[day] || (pathState[day] = { picks: [null, null, null], t: null, show: data.default_show });
+  const firstStarts = data.nodes.map(n => n.start);
+  const tMin = Math.floor(Math.min(...firstStarts, 1440) / 30) * 30, tMax = Math.max(...firstStarts, 0);
+  const wrap = h('div', { class: 'pwrap' });
+  const sum = h('div', { class: 'psum' });
+  const cursorEl = h('span', { class: 'pcur' });
+  const slider = h('input', { type: 'range', min: tMin, max: tMax, step: 5, value: st.t == null ? tMin : st.t, 'aria-label': 'Free from' });
+  const showEl = h('div', { class: 'chips' });
+  const baseOf = () => data.lineups.slice(0, st.show);
+  const consistent = (L, p) => p.every((x, j) => !x || L.s[j] === x);
+
+  function pick(i, sid) {
+    const p = st.picks.slice();
+    if (p[i] === sid) p[i] = null;
+    else {
+      p[i] = sid;
+      if (!baseOf().some(L => consistent(L, p))) { p.fill(null); p[i] = sid; }  // a pick that clashes replaces the old ones
+    }
+    st.picks = p;
+    if (p.some(Boolean)) st.t = null;
+    render();
+  }
+
+  function render() {
+    const base = baseOf();
+    const picked = st.picks.some(Boolean);
+    const live = base.filter(L => consistent(L, st.picks) && (picked || st.t == null || L.s.every(s => nodes[s].start >= st.t)));
+    const liveAt = [0, 1, 2].map(i => new Set(live.map(L => L.s[i])));
+    const lastEnd = Math.max(0, ...st.picks.filter(Boolean).map(s => nodes[s].end));
+    const cursor = picked ? lastEnd : st.t;
+    cursorEl.textContent = cursor == null ? 'Free from any time' : (picked ? 'Free again at ' : 'Free from ') + fmtMin(cursor);
+    slider.value = cursor == null ? tMin : Math.min(tMax, Math.max(tMin, cursor));
+
+    const rows = [0, 1, 2].map(i => {
+      const ids = [...new Set(base.map(L => L.s[i]))].sort((a, b) => nodes[a].start - nodes[b].start || a - b);
+      const a = ids.length ? fmtMin(nodes[ids[0]].start) : '', z = ids.length ? fmtMin(nodes[ids[ids.length - 1]].start) : '';
+      const span = a === z ? 'at ' + a : `${a} to ${z}`;
+      return h('section', { class: 'prow' },
+        h('h3', null, SLOTS[i], h('small', null, span)),
+        h('div', { class: 'ptiles' }, ids.map(sid => {
+          const n = nodes[sid], on = st.picks[i] === sid, alive = liveAt[i].has(sid);
+          const sc = tileScore(n.why);
+          const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), title: reasonLine(n.why), 'data-k': i + ':' + sid },
+            h('a', { class: 'pposter', href: '#/film/' + n.film_id, 'aria-label': 'Open ' + titleCase(n.title) }, poster(n.poster, titleCase(n.title), 'pt')),
+            h('button', { type: 'button', class: 'ppick', 'aria-pressed': on ? 'true' : 'false', onclick: () => pick(i, sid) }, on ? 'Picked' : 'Pick'),
+            h('div', { class: 'ptime' }, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), fmtMin(n.start)),
+            h('div', { class: 'pname' }, titleCase(n.title)),
+            sc.chip);
+          return t;
+        })));
+    });
+    wrap.replaceChildren(...rows.flatMap((r, i) => (i ? [h('div', { class: 'pgap' }), r] : [r])));
+    relayout = () => edges(wrap, live, st.picks);
+
+    const best = live[0];
+    const lines = [];
+    if (!live.length) lines.push(h('p', { class: 'note' }, 'No full plan fits this. Move the time earlier or tap Pick again to release a film.'));
+    else {
+      const full = st.picks.every(Boolean);
+      lines.push(h('p', { class: 'note' }, full ? 'Your plan' : `${live.length} ${live.length === 1 ? 'plan' : 'plans'} still possible. Best from here:`));
+      lines.push(h('div', { class: 'why' },
+        best.s.map(sid => h('div', null, `${fmtMin(nodes[sid].start)} – ${fmtMin(nodes[sid].end)}  `, h('a', { href: '#/film/' + nodes[sid].film_id }, titleCase(nodes[sid].title)), ` · ${nodes[sid].building}`)),
+        h('div', { class: 'meta' }, `Score ${best.score.toFixed(1)} · ${money(best.cost)} · ${best.changes ? best.changes + ' building change' + (best.changes > 1 ? 's' : '') : 'all in one building'}`)));
+    }
+    sum.replaceChildren(...lines);
+    showEl.replaceChildren(
+      chip(`Top ${data.default_show}`, st.show === data.default_show, () => setShow(data.default_show)),
+      chip(`Top ${data.more_show}`, st.show === data.more_show, () => setShow(data.more_show)),
+      chip(`Everything (${data.lineups.length})`, st.show === data.lineups.length, () => setShow(data.lineups.length)));
+    if (window.requestAnimationFrame) window.requestAnimationFrame(() => relayout && relayout());
+  }
+
+  function setShow(n) { st.show = Math.min(n, data.lineups.length); st.picks = [null, null, null]; render(); }
+  slider.addEventListener('input', () => { st.t = +slider.value; st.picks = [null, null, null]; render(); });
+
+  screen(
+    h('a', { class: 'back', href: '#/plans' }, '← Plans'),
+    h('h2', null, 'Every option: ' + fmtDay(day)),
+    h('div', { class: 'chips' }, trip.map(d => chip(fmtDay(d), d === day, () => { location.hash = '#/paths/' + d; }, 'trip'))),
+    h('p', { class: 'note' }, 'Each row is a film slot. Lines join films that can follow each other. Where lines meet in a dot, those films lead to the same choices. Tap a poster for the film, Pick to lock it in.'),
+    h('div', { class: 'pbar' }, cursorEl, slider,
+      h('button', { type: 'button', class: 'chip', onclick: () => { st.picks = [null, null, null]; st.t = null; render(); } }, 'Reset')),
+    h('div', { class: 'pleg' }, buildings.map(b => h('span', null, h('span', { class: 'bdot', style: 'background:' + bcol(b) }), b))),
+    wrap, sum, h('p', { class: 'meta' }, 'Show:'), showEl);
+  render();
+}
+
+// Lines between the tiles of neighbouring rows (browser only: needs layout). Live pairs only.
+function edges(wrap, live, picks) {
+  if (!wrap.getBoundingClientRect || !document.createElementNS) return;
+  const box = wrap.getBoundingClientRect();
+  const at = {};
+  wrap.querySelectorAll('.ptile').forEach(el => { at[el.dataset.k] = el; });
+  const svg = svgEl('svg', { class: 'pedges', width: box.width, height: box.height, 'aria-hidden': 'true' });
+  const top = k => { const r = at[k].getBoundingClientRect(); return [r.left + r.width / 2 - box.left, r.top - box.top]; };
+  const bot = k => { const r = at[k].getBoundingClientRect(); return [r.left + r.width / 2 - box.left, r.bottom - box.top]; };
+  const curve = (a, b, hi) => svg.appendChild(svgEl('path', { d: `M${a[0]} ${a[1]}C${a[0]} ${(a[1] + b[1]) / 2} ${b[0]} ${(a[1] + b[1]) / 2} ${b[0]} ${b[1]}`, class: 'pe' + (hi ? ' hi' : '') }));
+  for (const i of [0, 1]) {
+    const succ = new Map();
+    live.forEach(L => { if (!succ.has(L.s[i])) succ.set(L.s[i], new Set()); succ.get(L.s[i]).add(L.s[i + 1]); });
+    const groups = new Map();
+    for (const [a, set] of succ) { const sig = [...set].sort((x, y) => x - y).join(); groups.set(sig, (groups.get(sig) || []).concat(a)); }
+    for (const [sig, members] of groups) {
+      const outs = sig.split(',').map(Number);
+      if (members.length < 2) { members.forEach(a => outs.forEach(b => curve(bot(i + ':' + a), top((i + 1) + ':' + b), picks[i] === a || picks[i + 1] === b))); continue; }
+      const src = members.map(a => bot(i + ':' + a)), dst = outs.map(b => top((i + 1) + ':' + b));
+      const jx = [...src, ...dst].reduce((s, p) => s + p[0], 0) / (src.length + dst.length);
+      const jy = (Math.max(...src.map(p => p[1])) + Math.min(...dst.map(p => p[1]))) / 2;
+      const hiIn = members.some(a => picks[i] === a);
+      members.forEach((a, k) => curve(src[k], [jx, jy], picks[i] === a));
+      outs.forEach((b, k) => curve([jx, jy], dst[k], hiIn || picks[i + 1] === b));
+      svg.appendChild(svgEl('circle', { cx: jx, cy: jy, r: 5, class: 'pj' + (hiIn ? ' hi' : '') }));
+    }
+  }
+  const old = wrap.querySelector('.pedges');
+  if (old) old.remove();
+  wrap.insertBefore(svg, wrap.firstChild);
 }
 
 const filmState = { day: 'trip', q: '', genre: '', sort: 'az' };
@@ -366,6 +520,7 @@ async function scheduleView(day) {
 const routes = [
   [/^#\/plans$/, plansView, 'plans'],
   [/^#\/plan\/(\d+)$/, planView, 'plans'],
+  [/^#\/paths(?:\/(\d{4}-\d{2}-\d{2}))?$/, pathsView, 'plans'],
   [/^#\/films$/, filmsView, 'films'],
   [/^#\/film\/(ST\d+)$/, filmView, 'films'],
   [/^#\/schedule(?:\/(\d{4}-\d{2}-\d{2}))?$/, scheduleView, 'schedule'],
@@ -390,5 +545,6 @@ api('/api/festival').then(d => {
   if (d.festival) document.getElementById('fest').textContent = d.festival.name;
 }).catch(() => {});
 window.addEventListener('hashchange', route);
+window.addEventListener('resize', () => { if (relayout) relayout(); });
 route();
 })();

@@ -181,3 +181,49 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
 
   choose('az');
 }
+
+// ---- every option (branching view)
+{
+  const day = '2026-11-07';
+  const api = await (await fetch('/api/paths?day=' + day)).json();
+  check('paths API: lineups best first, each with three distinct sessions', api.lineups.length > 50 &&
+    api.lineups.every((L, i) => L.s.length === 3 && new Set(L.s).size === 3 && (i === 0 || api.lineups[i - 1].score >= L.score)), String(api.lineups.length));
+  const byId = Object.fromEntries(api.nodes.map(n => [n.session_id, n]));
+  check('paths API: every lineup respects the 5/15 min walking buffer and film order', api.lineups.every(L => L.s.every((s, i) => {
+    if (!i) return true;
+    const a = byId[L.s[i - 1]], b = byId[s];
+    return b.start >= a.end + (a.building === b.building ? 5 : 15);
+  })), '');
+  check('paths API: a non-trip day is refused', (await fetch('/api/paths?day=2026-11-04')).status === 404, '');
+  check('paths API: bad day is a 400', (await fetch('/api/paths?day=x')).status === 400, '');
+
+  t = await go('#/paths/' + day);
+  const tiles = () => app.find(e => /(^| )ptile( |$)/.test(e.className));
+  const live = () => tiles().filter(e => !/(^| )dead( |$)/.test(e.className));
+  const pickBtn = tile => tile.find(e => e.tag === 'button' && /ppick/.test(e.className))[0];
+  const click = el => (el.ls.click || []).forEach(fn => fn());
+  check('paths page: three rows of poster tiles linking to film pages', app.find(e => /(^| )prow( |$)/.test(e.className)).length === 3 &&
+    tiles().length > 6 && tiles().every(tl => tl.find(e => e.tag === 'a' && (e.attrs.href || '').startsWith('#/film/')).length === 1), String(tiles().length));
+  check('paths page: copy has no em-dash', !t.includes('—'), t.slice(0, 200));
+  const plansText = /(\d+) plans? still possible/.exec(t);
+  const before = +plansText[1];
+  const firstRow = app.find(e => /(^| )prow( |$)/.test(e.className))[0];
+  const firstTile = firstRow.find(e => /(^| )ptile( |$)/.test(e.className))[0];
+  click(pickBtn(firstTile));
+  t = app.text();
+  const after = +(/(\d+) plans? still possible/.exec(t) || [0, 1])[1];
+  check('picking a film narrows the plans and dims the others', after < before && live().length < tiles().length, `${before} -> ${after}`);
+  check('picked tile says Picked', pickBtn(app.find(e => /(^| )ptile( |$)/.test(e.className) && /(^| )on( |$)/.test(e.className))[0]).text() === 'Picked', '');
+  const picked = app.find(e => /(^| )ptile( |$)/.test(e.className) && /(^| )on( |$)/.test(e.className))[0];
+  click(pickBtn(picked));
+  check('tapping Picked releases it', +(/(\d+) plans? still possible/.exec(app.text()) || [0, -1])[1] === before, app.text().slice(0, 300));
+  // the time cursor: arriving late leaves fewer plans, moving it back restores them
+  const slider = app.find(e => e.tag === 'input' && e.attrs.type === 'range')[0];
+  slider.value = String(+slider.attrs.max); (slider.ls.input || []).forEach(fn => fn());
+  const late = +(/(\d+) plans? still possible/.exec(app.text()) || [0, 0])[1];
+  check('time cursor: free only from the latest first start leaves fewer plans', late < before, `${before} -> ${late}`);
+  slider.value = slider.attrs.min; (slider.ls.input || []).forEach(fn => fn());
+  check('time cursor: back to the start restores them', +(/(\d+) plans? still possible/.exec(app.text()) || [0, -1])[1] === before, '');
+  t = await go('#/plans');
+  check('plans page links to every-option view for each trip day', app.find(e => e.tag === 'a' && (e.attrs.href || '').startsWith('#/paths/')).length === 4, '');
+}

@@ -143,6 +143,22 @@ def best_lineups(cands: list[Cand], cfg: dict, top: int = 3) -> list[dict]:
     return found[:top]
 
 
+def options(conn, cfg: dict, day: str) -> dict:
+    """Every valid lineup for one day, best first, plus the sessions they use: the raw material for the
+    branching view. The site works out forks and merges from this list, so picks can narrow it live."""
+    found = best_lineups(load_day(conn, cfg, day), cfg, top=10 ** 9)
+    nodes: dict[int, dict] = {}
+    for r in found:
+        for c in r["lineup"]:
+            nodes.setdefault(c.session_id, {
+                "session_id": c.session_id, "film_id": c.film_id, "title": c.title, "starts_at": c.starts_at,
+                "start": c.start, "end": c.end, "building": c.building, "score": round(c.score, 1),
+                "confidence": c.confidence})
+    return {"day": day, "nodes": list(nodes.values()),
+            "lineups": [{"s": [c.session_id for c in r["lineup"]], "score": r["score"], "cost": r["cost"],
+                         "changes": r["changes"]} for r in found]}
+
+
 def summary(res: dict, cfg: dict, labels: dict[str, str]) -> str:
     p = cfg["plan"]
     ln = res["lineup"]

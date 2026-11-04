@@ -14,10 +14,23 @@ Palette and fonts are CSS variables at the top of `marquee.css`: paper `#f3e9d2`
 ## Routes (hash router in marquee.js)
 
 `#/plans` (ranked plan tickets; until plans exist, the four trip days with screening counts) ·
+`#/paths[/<YYYY-MM-DD>]` (every option for a trip day, see below) ·
 `#/plan/<id>` (timeline: films, free-time gaps labelled lunch/dinner by overlap with 11:30-14:30 and
 16:30-20:00) · `#/films` (filters: trip days / all / one day, title search, genre; sort: A to Z, highest score with
 Unrated films always last, earliest showtime within the chosen days; filters and sort persist while the tab is open) · `#/film/<ST id>` ·
 `#/schedule[/<YYYY-MM-DD>]` (one day, grouped by building).
+
+## Every option (`#/paths/<day>`, `pathsView` in marquee.js)
+
+Vertical branching view (owner decision, 2026-11-04): one row per film slot (first, second, third), poster tiles
+in each row (poster opens the film page, **Pick** locks the film in), lines between films that can follow each other.
+`/api/paths?day=` (trip days only) returns every valid lineup (planner rules: buffers, meals, 1 am home, no repeat)
+best first, plus the sessions in them (`planner.options`). The page works forks and merges out itself from the
+lineups still live: films whose next films are exactly the same set share a dot, so redundant branches fold into one.
+It starts from the best `[plan] options_default` lineups (30); chips widen it to `options_more` or everything (212-889 a day).
+The "free from" slider is the time cursor: moving it drops lineups with a film starting earlier and clears picks; picking
+moves the cursor to the end of the latest pick. Lines are an SVG measured from the DOM in the browser only
+(`edges()`); the stub-DOM smoke test skips them, so check lines by eye after layout changes. Plan list and plan pages link here.
 
 ## Score and why
 

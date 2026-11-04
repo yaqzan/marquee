@@ -138,3 +138,33 @@ a.ticket:active { background: #f3ead2; }
 .countrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 2px 0 8px; }
 .countrow .count { margin: 0; }
 .sortsel { font: 13px var(--sans); padding: 4px 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink); }
+
+/* Every option (branching view) */
+.pbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; background: var(--paper); border-bottom: 1px solid var(--rule); padding: 8px 0; margin: 4px 0; }
+.pcur { flex: none; font: 13px var(--sans); min-width: 8.5rem; }
+.pbar input[type=range] { flex: 1; min-width: 0; accent-color: var(--red); }
+.pleg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
+.bdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
+.pwrap { position: relative; }
+.pedges { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
+.pe { fill: none; stroke: var(--rule); stroke-width: 1.5; }
+.pe.hi { stroke: var(--gold); stroke-width: 2.5; }
+.pj { fill: var(--ink); stroke: var(--paper); stroke-width: 2; }
+.pj.hi { fill: var(--gold); }
+.prow { position: relative; z-index: 1; }
+.prow h3 { display: inline-block; position: relative; z-index: 2; background: var(--paper); padding-right: 8px; font: 600 11px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+.prow h3 small { font: 400 11px var(--sans); letter-spacing: 0; text-transform: none; margin-left: 8px; }
+.ptiles { display: flex; flex-wrap: wrap; gap: 14px 8px; }
+.prow h3 + .ptiles { margin-top: 0; }
+.pgap { height: 56px; }
+.ptile { width: 64px; background: var(--paper); text-align: center; position: relative; transition: opacity .15s; }
+.ptile.dead { opacity: .3; }
+.ptile.on .poster { border: 2px solid var(--gold); }
+.poster.pt { width: 64px; height: 92px; }
+.pposter { display: block; }
+.ppick { width: 100%; margin: 4px 0 0; font: 12px var(--sans); padding: 3px 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--card); color: var(--ink); cursor: pointer; }
+.ptile.on .ppick { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.ptime { font: 11px var(--sans); color: var(--red); margin-top: 4px; }
+.pname { font: 11px/1.25 var(--sans); max-height: 2.5em; overflow: hidden; }
+.ptile .scorechip { display: inline-block; font-size: 11px; padding: 0 6px; margin-top: 2px; }
+.psum { margin-top: 16px; }

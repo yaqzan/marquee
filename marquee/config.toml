@@ -41,6 +41,8 @@ lunch_window = ["11:30", "14:30"]
 dinner_window = ["16:30", "20:00"]
 max_total_runtime_min = 480     # fatigue cap
 # Prices (HST incl.). A premium screening is any film tagged premium_tag_code; the pass does not cover them.
+options_default = 30            # lineups the branching view starts from (best first); the rest sit behind "Show more"
+options_more = 100
 price_single_cents = 1900
 price_premium_cents = 4000
 price_premium_3pack_cents = 9900

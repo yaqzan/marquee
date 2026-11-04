@@ -14,7 +14,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import DB_PATH, WEB_DIR, __version__, load_config, store
+from . import DB_PATH, WEB_DIR, __version__, load_config, planner, store
 from .posters import POSTER_DIR
 
 HOST, PORT = "127.0.0.1", 5007
@@ -202,6 +202,22 @@ def plans(c, day: str | None) -> dict:
     return {"plans": out}
 
 
+def paths(c, day: str) -> dict | None:
+    """The day's branching options: every valid lineup (planner rules) and the posters/scores of the sessions in them."""
+    cfg = load_config()
+    if day not in cfg["plan"]["candidate_days"]:
+        return None
+    out = planner.options(c, cfg, day)
+    labels = {x["code"]: x["label"] for x in c.execute("SELECT code, label FROM tag")}
+    md = media(c, cfg)
+    for n in out["nodes"]:
+        n["why"] = score_view(c, cfg, n["film_id"], labels)
+        m = md.get(n["film_id"], {})
+        n["poster"] = m.get("poster")
+    out["default_show"], out["more_show"] = cfg["plan"]["options_default"], cfg["plan"]["options_more"]
+    return out
+
+
 def api(path: str, q: dict) -> tuple[int, dict]:
     try:
         with _conn() as c:
@@ -216,6 +232,12 @@ def api(path: str, q: dict) -> tuple[int, dict]:
             if path == "/api/sessions":
                 day = q.get("day", [""])[0]
                 return (200, sessions(c, day)) if DAY_RE.match(day) else (400, {"error": "day=YYYY-MM-DD required"})
+            if path == "/api/paths":
+                day = q.get("day", [""])[0]
+                if not DAY_RE.match(day):
+                    return 400, {"error": "day=YYYY-MM-DD required"}
+                data = paths(c, day)
+                return (200, data) if data else (404, {"error": "not a trip day"})
             if path == "/api/plans":
                 day = q.get("day", [""])[0]
                 return 200, plans(c, day if DAY_RE.match(day) else None)
