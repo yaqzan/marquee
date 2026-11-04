@@ -203,7 +203,20 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   const pickBtn = tile => tile.find(e => e.tag === 'button' && /ppick/.test(e.className))[0];
   const click = el => (el.ls.click || []).forEach(fn => fn());
   check('paths page: three rows of poster tiles linking to film pages', app.find(e => /(^| )prow( |$)/.test(e.className)).length === 3 &&
-    tiles().length > 6 && tiles().every(tl => tl.find(e => e.tag === 'a' && (e.attrs.href || '').startsWith('#/film/')).length === 1), String(tiles().length));
+    tiles().length > 6 && tiles().every(tl => tl.find(e => e.tag === 'a' && (e.attrs.href || '').startsWith('#/film/')).length === 2), String(tiles().length));
+  check('paths API: top-percentile films carry the glow flag, and only they outrank the rest', api.nodes.some(n => n.glow) &&
+    Math.min(...api.nodes.filter(n => n.glow).map(n => n.score)) >= Math.max(...api.nodes.filter(n => !n.glow).map(n => n.score)), '');
+  const badges = app.find(e => /(^| )pbadge( |$)/.test(e.className));
+  check('paths page: every tile has a score badge, unrated ones a muted dash', badges.length === tiles().length &&
+    badges.filter(b => /none/.test(b.className)).every(b => b.text().trim() === '–') && !app.text().includes('Unrated') &&
+    badges.filter(b => !/none/.test(b.className)).every(b => /^\d+$/.test(b.text().trim()) && /hsl\(/.test(b.attrs.style)), badges.map(b => b.text()).join(','));
+  check('paths page: glow class only on flagged films', badges.filter(b => /glow/.test(b.className)).length === tiles().filter(tl => api.nodes.find(n => n.glow && tl.attrs['data-k'].endsWith(':' + n.session_id))).length, '');
+  const frame0 = tiles()[0].find(e => /(^| )pframe( |$)/.test(e.className))[0];
+  (frame0.ls.click || []).forEach(fn => fn());
+  check('paths page: tapping a poster reveals its Pick overlay', /(^| )open( |$)/.test(tiles()[0].className), tiles()[0].className);
+  (frame0.ls.click || []).forEach(fn => fn());
+  check('paths page: tapping again hides it', !/(^| )open( |$)/.test(tiles()[0].className), '');
+  check('paths page: uses the wide column', /(^| )wide( |$)/.test(app.className), app.className);
   check('paths page: copy has no em-dash', !t.includes('—'), t.slice(0, 200));
   const plansText = /(\d+) plans? still possible/.exec(t);
   const before = +plansText[1];

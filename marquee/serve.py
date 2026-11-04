@@ -202,6 +202,21 @@ def plans(c, day: str | None) -> dict:
     return {"plans": out}
 
 
+def glow_threshold(c, cfg: dict) -> float | None:
+    """The score at the `[display] glow_percentile` mark among films that have something behind their number
+    (critic scores, festival tags or a taste match). Unrated films would drag it down to the default 50."""
+    vals = []
+    for r in c.execute("SELECT fs.score, fs.confidence, fs.parts FROM film_score fs JOIN film f ON f.id=fs.film_id "
+                       "WHERE f.removed_at IS NULL"):
+        parts = json.loads(r["parts"])
+        if r["confidence"] >= 0.15 or parts.get("pedigree_codes") or parts.get("taste_nudge"):
+            vals.append(r["score"])
+    if not vals:
+        return None
+    vals.sort()
+    return vals[min(int(len(vals) * cfg["display"]["glow_percentile"] / 100), len(vals) - 1)]
+
+
 def paths(c, day: str) -> dict | None:
     """The day's branching options: every valid lineup (planner rules) and the posters/scores of the sessions in them."""
     cfg = load_config()
@@ -210,8 +225,11 @@ def paths(c, day: str) -> dict | None:
     out = planner.options(c, cfg, day)
     labels = {x["code"]: x["label"] for x in c.execute("SELECT code, label FROM tag")}
     md = media(c, cfg)
+    glow = glow_threshold(c, cfg)
     for n in out["nodes"]:
         n["why"] = score_view(c, cfg, n["film_id"], labels)
+        n["glow"] = glow is not None and n["why"] is not None and n["why"]["score"] >= glow and not (
+            n["why"]["confidence"] < 0.15 and not n["why"]["tags"] and not n["why"]["taste"]["nudge"])
         m = md.get(n["film_id"], {})
         n["poster"] = m.get("poster")
     out["buffers"] = {"same": cfg["plan"]["buffer_same_building_min"], "walk": cfg["plan"].get("walk_min", {}),

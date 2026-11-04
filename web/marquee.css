@@ -139,7 +139,9 @@ a.ticket:active { background: #f3ead2; }
 .countrow .count { margin: 0; }
 .sortsel { font: 13px var(--sans); padding: 4px 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink); }
 
-/* Every option (branching view) */
+/* Every option (branching view): uses the full width of a desktop browser, three posters across on a phone */
+main.wide { max-width: 78rem; }
+main.wide .note, main.wide .why { max-width: 44rem; }
 .pbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; background: var(--paper); border-bottom: 1px solid var(--rule); padding: 8px 0; margin: 4px 0; }
 .pcur { flex: none; font: 13px var(--sans); min-width: 8.5rem; }
 .pbar input[type=range] { flex: 1; min-width: 0; accent-color: var(--red); }
@@ -154,19 +156,27 @@ a.ticket:active { background: #f3ead2; }
 .prow { position: relative; z-index: 1; }
 .prow h3 { display: inline-block; position: relative; z-index: 2; background: var(--paper); padding-right: 8px; font: 600 11px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
 .prow h3 small { font: 400 11px var(--sans); letter-spacing: 0; text-transform: none; margin-left: 8px; }
-.ptiles { display: flex; flex-wrap: wrap; gap: 14px 8px; }
-.prow h3 + .ptiles { margin-top: 0; }
-.pgap { height: 56px; }
-.ptile { width: 64px; background: var(--paper); text-align: center; position: relative; transition: opacity .15s; }
+.pgap { height: 64px; }
+.ptiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 200px)); justify-content: center; gap: 18px 12px; }
+.ptile { background: var(--paper); transition: opacity .15s; min-width: 0; }
 .ptile.dead { opacity: .3; }
-.ptile.on .poster { border: 2px solid var(--gold); }
-.poster.pt { width: 64px; height: 92px; }
-.pposter { display: block; }
-.ppick { width: 100%; margin: 4px 0 0; font: 12px var(--sans); padding: 3px 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--card); color: var(--ink); cursor: pointer; }
-.ptile.on .ppick { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-.ptime { font: 11px var(--sans); color: var(--red); margin-top: 4px; }
-.ptime small { display: block; font-size: 10px; color: var(--muted); }
+.pframe { position: relative; cursor: pointer; border-radius: 6px; outline-offset: 2px; }
+.poster.pt { width: 100%; height: auto; aspect-ratio: 2 / 3; border-radius: 6px; }
+.ptile.on .poster.pt { border: 2px solid var(--gold); }
+.pbadge { position: absolute; top: 6px; right: 6px; min-width: 28px; text-align: center; font: 700 13px/1 var(--sans); color: #fff; padding: 5px 7px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.85); }
+.pbadge.thin { border-style: dashed; }
+.pbadge.none { background: rgba(36,27,21,.45); color: #f3e9d2; font-weight: 400; }
+.pbadge.glow { box-shadow: 0 0 0 3px color-mix(in srgb, var(--glow) 45%, transparent), 0 0 14px 6px color-mix(in srgb, var(--glow) 75%, white 10%); }
+.pmark { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font: 600 12px var(--sans); background: var(--gold); color: #fff; padding: 3px 0; border-radius: 0 0 4px 4px; }
+.pover { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: center; gap: 8px; padding: 10px; background: rgba(36,27,21,.62); border-radius: 6px; }
+.ptile.open .pover { display: flex; }
+@media (hover: hover) { .pframe:hover .pover { display: flex; } }
+.ppick, .pgo { display: block; width: 100%; text-align: center; font: 600 14px var(--sans); padding: 9px 0; border-radius: 8px; border: 0; cursor: pointer; text-decoration: none; }
+.ppick { background: var(--paper); color: var(--ink); }
+.ptile.on .ppick { background: var(--gold); color: #fff; }
+.pgo { background: transparent; color: #f3e9d2; border: 1px solid rgba(243,233,210,.7); font-weight: 400; }
+.ptime { font: 12px var(--sans); color: var(--red); margin-top: 5px; }
+.ptime small { margin-left: 6px; font-size: 11px; color: var(--muted); }
+.pname { display: block; font: 14px/1.25 var(--serif); color: var(--ink); text-decoration: none; margin-top: 1px; }
 .gap { margin: 2px 0 2px 1px; font-size: 12px; }
-.pname { font: 11px/1.25 var(--sans); max-height: 2.5em; overflow: hidden; }
-.ptile .scorechip { display: inline-block; font-size: 11px; padding: 0 6px; margin-top: 2px; }
 .psum { margin-top: 16px; }

@@ -257,6 +257,20 @@ const pathState = {};
 const BCOL = ['#7a2f22', '#a8741a', '#3d5a6c', '#5a6b3a'];
 const SLOTS = ['First film', 'Second film', 'Third film'];
 let relayout = null;
+let openTile = null;
+
+// Score badge on a poster: colour runs red to green with the score; the top percentile (server's `glow` flag) glows;
+// a film with nothing behind its number gets a muted dash instead of a default 50.
+function scoreColor(score) {
+  const t = Math.max(0, Math.min(1, (score - 45) / 40));
+  return `hsl(${Math.round(8 + t * 112)} 62% 34%)`;
+}
+function scoreBadge(n) {
+  if (isUnrated(n.why)) return h('span', { class: 'pbadge none', title: 'No critic scores or festival tags yet' }, '–');
+  const col = scoreColor(n.why.score), thin = n.why.confidence < 0.15;
+  return h('span', { class: 'pbadge' + (n.glow ? ' glow' : '') + (thin ? ' thin' : ''), title: (n.glow ? 'Top-rated at the festival. ' : '') + n.why.coverage,
+    style: `background:${col};--glow:${col}` }, Math.round(n.why.score));
+}
 
 function svgEl(tag, attrs) {
   const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -313,13 +327,23 @@ async function pathsView(dayArg) {
         h('h3', null, SLOTS[i], h('small', null, span)),
         h('div', { class: 'ptiles' }, ids.map(sid => {
           const n = nodes[sid], on = st.picks[i] === sid, alive = liveAt[i].has(sid);
-          const sc = tileScore(n.why);
-          const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), title: reasonLine(n.why), 'data-k': i + ':' + sid },
-            h('a', { class: 'pposter', href: '#/film/' + n.film_id, 'aria-label': 'Open ' + titleCase(n.title) }, poster(n.poster, titleCase(n.title), 'pt')),
-            h('button', { type: 'button', class: 'ppick', 'aria-pressed': on ? 'true' : 'false', onclick: () => pick(i, sid) }, on ? 'Picked' : 'Pick'),
+          const key = titleCase(n.title);
+          const frame = h('div', { class: 'pframe', role: 'button', tabindex: '0', 'aria-label': `${key}: show options` },
+            poster(n.poster, key, 'pt'), scoreBadge(n),
+            on ? h('div', { class: 'pmark' }, 'Picked') : null,
+            h('div', { class: 'pover' },
+              h('button', { type: 'button', class: 'ppick', 'aria-pressed': on ? 'true' : 'false', onclick: e => { e.stopPropagation(); pick(i, sid); } }, on ? 'Release' : 'Pick'),
+              h('a', { class: 'pgo', href: '#/film/' + n.film_id, onclick: e => e.stopPropagation() }, 'Film page')));
+          const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), 'data-k': i + ':' + sid }, frame,
             h('div', { class: 'ptime' }, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), fmtMin(n.start), h('small', null, 'ends ' + fmtMin(n.end))),
-            h('div', { class: 'pname' }, titleCase(n.title)),
-            sc.chip);
+            h('a', { class: 'pname', href: '#/film/' + n.film_id }, key));
+          const toggle = () => {
+            if (openTile && openTile !== t) openTile.classList.remove('open');
+            t.classList.toggle('open');
+            openTile = t.classList.contains('open') ? t : null;
+          };
+          frame.addEventListener('click', toggle);
+          frame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
           return t;
         })));
     });
@@ -529,6 +553,7 @@ const routes = [
 
 async function route() {
   const hash = location.hash || '#/plans';
+  app.classList.toggle('wide', /^#\/paths/.test(hash));
   for (const [re, fn, tab] of routes) {
     const m = hash.match(re);
     if (!m) continue;

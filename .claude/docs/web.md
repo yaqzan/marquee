@@ -27,7 +27,7 @@ in each row (poster opens the film page, **Pick** locks the film in), lines betw
 `/api/paths?day=` (trip days only) returns every valid lineup (planner rules: buffers, meals, 1 am home, no repeat)
 best first, plus the sessions in them (`planner.options`). The page works forks and merges out itself from the
 lineups still live: films whose next films are exactly the same set share a dot, so redundant branches fold into one.
-It starts from the best `[plan] options_default` lineups (30); chips widen it to `options_more` or everything (212-889 a day).
+Tiles: big posters (2:3, up to 200 px, auto-fill grid so a desktop uses the width; `main.wide` lifts the 40rem cap on this route only), a score badge on each poster (hue red to green with the score; films at the `[display] glow_percentile` of rated films get a glow, computed server-side as `glow`; no real score shows a muted dash), and tap or hover reveals Pick and Film page over the poster. It starts from the best `[plan] options_default` lineups (30); chips widen it to `options_more` or everything (212-889 a day).
 The "free from" slider is the time cursor: moving it drops lineups with a film starting earlier and clears picks; picking
 moves the cursor to the end of the latest pick. Lines are an SVG measured from the DOM in the browser only
 (`edges()`); the stub-DOM smoke test skips them, so check lines by eye after layout changes. Plan list and plan pages link here.

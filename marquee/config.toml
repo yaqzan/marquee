@@ -122,4 +122,5 @@ max_bytes = 12000000            # refuse anything larger than this
 # not available from any open API: OMDb returns N/A for it.)
 audience_imdb_min_votes = 100
 audience_tmdb_min_votes = 20
+glow_percentile = 90            # films at or above this percentile of rated films get a glow on the every-option view
 fresh_at = 60                   # percent at or above which a tomato / popcorn icon is the "fresh" one
