@@ -255,7 +255,6 @@ async function planView(id) {
 // from what is still live. The server only supplies lineups and sessions.
 const pathState = {};
 const BCOL = ['#7a2f22', '#a8741a', '#3d5a6c', '#5a6b3a'];
-const SLOTS = ['First film', 'Second film', 'Third film'];
 let relayout = null;
 let openTile = null;
 
@@ -286,75 +285,79 @@ async function pathsView(dayArg) {
   const nodes = Object.fromEntries(data.nodes.map(n => [n.session_id, n]));
   const buildings = [...new Set(data.nodes.map(n => n.building))].sort();
   const bcol = b => BCOL[buildings.indexOf(b) % BCOL.length];
-  const st = pathState[day] || (pathState[day] = { picks: [null, null, null], t: null, show: data.default_show });
-  const firstStarts = data.nodes.map(n => n.start);
-  const tMin = Math.floor(Math.min(...firstStarts, 1440) / 30) * 30, tMax = Math.max(...firstStarts, 0);
+  const st = pathState[day] || (pathState[day] = { picks: [], t: null, show: data.default_show });
+  const starts = data.nodes.map(n => n.start);
+  const tMin = Math.floor(Math.min(...starts, 1440) / 30) * 30, tMax = Math.max(...starts, 0);
   const wrap = h('div', { class: 'pwrap' });
   const sum = h('div', { class: 'psum' });
   const cursorEl = h('span', { class: 'pcur' });
   const slider = h('input', { type: 'range', min: tMin, max: tMax, step: 5, value: st.t == null ? tMin : st.t, 'aria-label': 'Free from' });
   const showEl = h('div', { class: 'chips' });
-  const baseOf = () => data.lineups.slice(0, st.show);
-  const consistent = (L, p) => p.every((x, j) => !x || L.s[j] === x);
 
-  function pick(i, sid) {
-    const p = st.picks.slice();
-    if (p[i] === sid) p[i] = null;
-    else {
-      p[i] = sid;
-      if (!baseOf().some(L => consistent(L, p))) { p.fill(null); p[i] = sid; }  // a pick that clashes replaces the old ones
-    }
+  const baseOf = () => data.lineups.slice(0, st.show);
+  const has = (L, p) => p.every(x => L.s.includes(x));
+
+  function pick(sid) {
+    let p = st.picks.includes(sid) ? st.picks.filter(x => x !== sid) : st.picks.concat(sid);
+    if (!baseOf().some(L => has(L, p))) p = [sid];  // a pick that clashes replaces the old ones
     st.picks = p;
-    if (p.some(Boolean)) st.t = null;
+    if (p.length) st.t = null;
     render();
   }
+  function startAt(t) { st.t = t; st.picks = []; render(); }
 
   function render() {
+    openTile = null;
     const base = baseOf();
-    const picked = st.picks.some(Boolean);
-    const live = base.filter(L => consistent(L, st.picks) && (picked || st.t == null || L.s.every(s => nodes[s].start >= st.t)));
-    const liveAt = [0, 1, 2].map(i => new Set(live.map(L => L.s[i])));
-    const lastEnd = Math.max(0, ...st.picks.filter(Boolean).map(s => nodes[s].end));
-    const cursor = picked ? lastEnd : st.t;
-    cursorEl.textContent = cursor == null ? 'Free from any time' : (picked ? 'Free again at ' : 'Free from ') + fmtMin(cursor);
+    const picked = st.picks.length > 0;
+    const live = base.filter(L => has(L, st.picks) && (picked || st.t == null || L.s.every(s => nodes[s].start >= st.t)));
+    const liveSet = new Set(live.flatMap(L => L.s));
+    const cursor = picked ? Math.max(...st.picks.map(s => nodes[s].end)) : st.t;
+    cursorEl.textContent = cursor == null ? 'Any start time' : (picked ? 'Free again at ' : 'Starting from ') + fmtMin(cursor);
     slider.value = cursor == null ? tMin : Math.min(tMax, Math.max(tMin, cursor));
 
-    const rows = [0, 1, 2].map(i => {
-      const ids = [...new Set(base.map(L => L.s[i]))].sort((a, b) => nodes[a].start - nodes[b].start || a - b);
-      const a = ids.length ? fmtMin(nodes[ids[0]].start) : '', z = ids.length ? fmtMin(nodes[ids[ids.length - 1]].start) : '';
-      const span = a === z ? 'at ' + a : `${a} to ${z}`;
-      return h('section', { class: 'prow' },
-        h('h3', null, SLOTS[i], h('small', null, span)),
-        h('div', { class: 'ptiles' }, ids.map(sid => {
-          const n = nodes[sid], on = st.picks[i] === sid, alive = liveAt[i].has(sid);
-          const key = titleCase(n.title);
-          const frame = h('div', { class: 'pframe', role: 'button', tabindex: '0', 'aria-label': `${key}: show options` },
-            poster(n.poster, key, 'pt'), scoreBadge(n),
-            on ? h('div', { class: 'pmark' }, 'Picked') : null,
-            h('div', { class: 'pover' },
-              h('button', { type: 'button', class: 'ppick', 'aria-pressed': on ? 'true' : 'false', onclick: e => { e.stopPropagation(); pick(i, sid); } }, on ? 'Release' : 'Pick'),
-              h('a', { class: 'pgo', href: '#/film/' + n.film_id, onclick: e => e.stopPropagation() }, 'Film page')));
-          const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), 'data-k': i + ':' + sid }, frame,
-            h('div', { class: 'ptime' }, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), fmtMin(n.start), h('small', null, 'ends ' + fmtMin(n.end))),
-            h('a', { class: 'pname', href: '#/film/' + n.film_id }, key));
-          const toggle = () => {
-            if (openTile && openTile !== t) openTile.classList.remove('open');
-            t.classList.toggle('open');
-            openTile = t.classList.contains('open') ? t : null;
-          };
-          frame.addEventListener('click', toggle);
-          frame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-          return t;
-        })));
+    // one tile per session, earliest first; films starting within 15 minutes of each other share a row
+    const ids = [...new Set(base.flatMap(L => L.s))].sort((a, b) => nodes[a].start - nodes[b].start || a - b);
+    const rows = [];
+    ids.forEach(id => {
+      const last = rows[rows.length - 1];
+      if (last && nodes[id].start - last.t <= 15) last.ids.push(id); else rows.push({ t: nodes[id].start, ids: [id] });
     });
-    wrap.replaceChildren(...rows.flatMap((r, i) => (i ? [h('div', { class: 'pgap' }), r] : [r])));
-    relayout = () => edges(wrap, live, st.picks);
+
+    const tileFor = sid => {
+      const n = nodes[sid], on = st.picks.includes(sid), alive = liveSet.has(sid);
+      const key = titleCase(n.title);
+      const frame = h('div', { class: 'pframe', role: 'button', tabindex: '0', 'aria-label': `${key}: show options` },
+        poster(n.poster, key, 'pt'), scoreBadge(n),
+        on ? h('div', { class: 'pmark' }, 'Picked') : null,
+        h('div', { class: 'pover' },
+          h('button', { type: 'button', class: 'ppick', 'aria-pressed': on ? 'true' : 'false', onclick: e => { if (e) e.stopPropagation(); pick(sid); } }, on ? 'Release' : 'Pick'),
+          h('a', { class: 'pgo', href: '#/film/' + n.film_id, onclick: e => { if (e) e.stopPropagation(); } }, 'Film page')));
+      const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), 'data-k': String(sid) }, frame,
+        h('div', { class: 'ptime' }, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), fmtMin(n.start), h('small', null, 'ends ' + fmtMin(n.end))),
+        h('a', { class: 'pname', href: '#/film/' + n.film_id }, key));
+      const toggle = () => {
+        if (openTile && openTile !== t) openTile.classList.remove('open');
+        t.classList.toggle('open');
+        openTile = t.classList.contains('open') ? t : null;
+      };
+      frame.addEventListener('click', toggle);
+      frame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      return t;
+    };
+    // the space above a row grows with the time since the row before, so order and rough distance read as time
+    const rowEls = rows.map((r, k) => h('section', { class: 'prow', style: k ? `margin-top:${Math.round(Math.max(56, Math.min(150, 40 + (r.t - rows[k - 1].t) * 0.3)))}px` : null },
+      h('button', { type: 'button', class: 'prowt', title: 'Start your day here', onclick: () => startAt(r.t) }, fmtMin(r.t)),
+      h('div', { class: 'ptiles' }, r.ids.map(tileFor))));
+    const pnow = cursor == null ? null : h('div', { class: 'pnow' }, h('span', null, (picked ? 'Free again at ' : 'Starting from ') + fmtMin(cursor)));
+    wrap.replaceChildren(...[...rowEls, pnow].filter(Boolean));
+    relayout = () => edges(wrap, live, st.picks, rows, rowEls, pnow, cursor);
 
     const best = live[0];
     const lines = [];
-    if (!live.length) lines.push(h('p', { class: 'note' }, 'No full plan fits this. Move the time earlier or tap Pick again to release a film.'));
+    if (!live.length) lines.push(h('p', { class: 'note' }, 'No full plan fits this. Move the time earlier, or tap Release on a picked film.'));
     else {
-      const full = st.picks.every(Boolean);
+      const full = st.picks.length >= 3;
       lines.push(h('p', { class: 'note' }, full ? 'Your plan' : `${live.length} ${live.length === 1 ? 'plan' : 'plans'} still possible. Best from here:`));
       lines.push(h('div', { class: 'why' },
         best.s.map((sid, k) => [k ? h('div', { class: 'meta gap' }, `${nodes[sid].start - nodes[best.s[k - 1]].end} min between${nodes[sid].building !== nodes[best.s[k - 1]].building ? ', and a walk' : ''}`) : null,
@@ -369,51 +372,58 @@ async function pathsView(dayArg) {
     if (window.requestAnimationFrame) window.requestAnimationFrame(() => relayout && relayout());
   }
 
-  function setShow(n) { st.show = Math.min(n, data.lineups.length); st.picks = [null, null, null]; render(); }
-  slider.addEventListener('input', () => { st.t = +slider.value; st.picks = [null, null, null]; render(); });
+  function setShow(n) { st.show = Math.min(n, data.lineups.length); st.picks = []; render(); }
+  slider.addEventListener('input', () => startAt(+slider.value));
 
   screen(
     h('a', { class: 'back', href: '#/plans' }, '← Plans'),
     h('h2', null, 'Every option: ' + fmtDay(day)),
     h('div', { class: 'chips' }, trip.map(d => chip(fmtDay(d), d === day, () => { location.hash = '#/paths/' + d; }, 'trip'))),
-    h('p', { class: 'note' }, 'Each row is a film slot. Lines join films that can follow each other with time to get out, grab popcorn and walk over. Where lines meet in a dot, those films lead to the same choices. Tap a poster for the film, Pick to lock it in.'),
+    h('p', { class: 'note' }, 'Each film appears once, earliest at the top. Lines join films that can follow each other with time to get out, grab popcorn and walk over. A dot means those films lead to the same choices. Tap a time to start your day there, or drag the slider. Tap a poster to pick it or open it.'),
     h('div', { class: 'pbar' }, cursorEl, slider,
-      h('button', { type: 'button', class: 'chip', onclick: () => { st.picks = [null, null, null]; st.t = null; render(); } }, 'Reset')),
+      h('button', { type: 'button', class: 'chip', onclick: () => { st.picks = []; st.t = null; render(); } }, 'Reset')),
     h('div', { class: 'pleg' }, buildings.map(b => h('span', null, h('span', { class: 'bdot', style: 'background:' + bcol(b) }), b))),
     wrap, sum, h('p', { class: 'meta' }, 'Show:'), showEl);
   render();
 }
 
-// Lines between the tiles of neighbouring rows (browser only: needs layout). Live pairs only.
-function edges(wrap, live, picks) {
+// Lines between consecutive films of the live lineups (browser only: needs layout). Films in the same row that lead
+// to exactly the same next films share a dot. A line may run behind tiles in the rows between its two ends.
+function edges(wrap, live, picks, rows, rowEls, pnow, cursor) {
   if (!wrap.getBoundingClientRect || !document.createElementNS) return;
   const box = wrap.getBoundingClientRect();
   const at = {};
   wrap.querySelectorAll('.ptile').forEach(el => { at[el.dataset.k] = el; });
   const svg = svgEl('svg', { class: 'pedges', width: box.width, height: box.height, 'aria-hidden': 'true' });
-  const top = k => { const r = at[k].getBoundingClientRect(); return [r.left + r.width / 2 - box.left, r.top - box.top]; };
-  const bot = k => { const r = at[k].getBoundingClientRect(); return [r.left + r.width / 2 - box.left, r.bottom - box.top]; };
+  const top = id => { const r = at[id].getBoundingClientRect(); return [r.left + r.width / 2 - box.left, r.top - box.top]; };
+  const bot = id => { const r = at[id].getBoundingClientRect(); return [r.left + r.width / 2 - box.left, r.bottom - box.top]; };
   const curve = (a, b, hi) => svg.appendChild(svgEl('path', { d: `M${a[0]} ${a[1]}C${a[0]} ${(a[1] + b[1]) / 2} ${b[0]} ${(a[1] + b[1]) / 2} ${b[0]} ${b[1]}`, class: 'pe' + (hi ? ' hi' : '') }));
-  for (const i of [0, 1]) {
-    const succ = new Map();
-    live.forEach(L => { if (!succ.has(L.s[i])) succ.set(L.s[i], new Set()); succ.get(L.s[i]).add(L.s[i + 1]); });
-    const groups = new Map();
-    for (const [a, set] of succ) { const sig = [...set].sort((x, y) => x - y).join(); groups.set(sig, (groups.get(sig) || []).concat(a)); }
-    for (const [sig, members] of groups) {
-      const outs = sig.split(',').map(Number);
-      if (members.length < 2) { members.forEach(a => outs.forEach(b => curve(bot(i + ':' + a), top((i + 1) + ':' + b), picks[i] === a || picks[i + 1] === b))); continue; }
-      const src = members.map(a => bot(i + ':' + a)), dst = outs.map(b => top((i + 1) + ':' + b));
-      const jx = [...src, ...dst].reduce((s, p) => s + p[0], 0) / (src.length + dst.length);
-      const jy = (Math.max(...src.map(p => p[1])) + Math.min(...dst.map(p => p[1]))) / 2;
-      const hiIn = members.some(a => picks[i] === a);
-      members.forEach((a, k) => curve(src[k], [jx, jy], picks[i] === a));
-      outs.forEach((b, k) => curve([jx, jy], dst[k], hiIn || picks[i + 1] === b));
-      svg.appendChild(svgEl('circle', { cx: jx, cy: jy, r: 5, class: 'pj' + (hiIn ? ' hi' : '') }));
-    }
+  const rowOf = {};
+  rows.forEach((r, k) => r.ids.forEach(id => { rowOf[id] = k; }));
+  const succ = new Map();
+  live.forEach(L => L.s.slice(0, -1).forEach((a, i) => { if (!succ.has(a)) succ.set(a, new Set()); succ.get(a).add(L.s[i + 1]); }));
+  const groups = new Map();
+  for (const [a, set] of succ) { const key = rowOf[a] + '|' + [...set].sort((x, y) => x - y).join(); groups.set(key, (groups.get(key) || []).concat(a)); }
+  for (const [key, members] of groups) {
+    const outs = key.split('|')[1].split(',').map(Number);
+    if (members.length < 2) { members.forEach(a => outs.forEach(b => curve(bot(a), top(b), picks.includes(a) || picks.includes(b)))); continue; }
+    const src = members.map(bot), dst = outs.map(top);
+    const jx = src.reduce((s, p) => s + p[0], 0) / src.length;
+    const jy = Math.min(Math.max(...src.map(p => p[1])) + 26, Math.min(...dst.map(p => p[1])) - 12);
+    const hiIn = members.some(a => picks.includes(a));
+    members.forEach((a, k) => curve(src[k], [jx, jy], picks.includes(a)));
+    outs.forEach((b, k) => curve([jx, jy], dst[k], hiIn || picks.includes(b)));
+    svg.appendChild(svgEl('circle', { cx: jx, cy: jy, r: 5, class: 'pj' + (hiIn ? ' hi' : '') }));
   }
   const old = wrap.querySelector('.pedges');
   if (old) old.remove();
   wrap.insertBefore(svg, wrap.firstChild);
+  if (pnow) {
+    const k = rows.findIndex(r => r.t >= cursor);
+    const nextTop = k < 0 ? box.height : rowEls[k].getBoundingClientRect().top - box.top;
+    const prevBot = k > 0 ? rowEls[k - 1].getBoundingClientRect().bottom - box.top : nextTop - 40;
+    pnow.style.top = Math.round((prevBot + nextTop) / 2) + 'px';
+  }
 }
 
 const filmState = { day: 'trip', q: '', genre: '', sort: 'az' };

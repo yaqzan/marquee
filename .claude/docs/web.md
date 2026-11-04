@@ -22,15 +22,22 @@ Unrated films always last, earliest showtime within the chosen days; filters and
 
 ## Every option (`#/paths/<day>`, `pathsView` in marquee.js)
 
-Vertical branching view (owner decision, 2026-11-04): one row per film slot (first, second, third), poster tiles
-in each row (poster opens the film page, **Pick** locks the film in), lines between films that can follow each other.
-`/api/paths?day=` (trip days only) returns every valid lineup (planner rules: buffers, meals, 1 am home, no repeat)
-best first, plus the sessions in them (`planner.options`). The page works forks and merges out itself from the
-lineups still live: films whose next films are exactly the same set share a dot, so redundant branches fold into one.
-Tiles: big posters (2:3, up to 200 px, auto-fill grid so a desktop uses the width; `main.wide` lifts the 40rem cap on this route only), a score badge on each poster (hue red to green with the score; films at the `[display] glow_percentile` of rated films get a glow, computed server-side as `glow`; no real score shows a muted dash), and tap or hover reveals Pick and Film page over the poster. It starts from the best `[plan] options_default` lineups (30); chips widen it to `options_more` or everything (212-889 a day).
-The "free from" slider is the time cursor: moving it drops lineups with a film starting earlier and clears picks; picking
-moves the cursor to the end of the latest pick. Lines are an SVG measured from the DOM in the browser only
-(`edges()`); the stub-DOM smoke test skips them, so check lines by eye after layout changes. Plan list and plan pages link here.
+Branching view (owner decisions, 2026-11-04): **one tile per session**, laid out as a time chart. Rows run earliest to
+latest (sessions starting within 15 minutes share a row; the space above a row grows with the time since the row before),
+each row has a tappable time label. Lines join a film to the films that can follow it in some live lineup, so a film
+that is the start of one plan and the middle of another is drawn once. Films in one row that lead to exactly the same
+next films share a dot (a merge). Starting your day at 3 pm = tap the 3:00 pm label (or drag the slider): lineups with a
+film before that time drop out, the rest stay lit, and a dashed line marks the time. Picking a film moves the cursor to
+when it ends; picks narrow the plans to those containing all of them.
+`/api/paths?day=` (trip days only) returns every valid lineup (planner rules: gaps, meals, 1 am home, no repeat)
+best first, plus the sessions in them (`planner.options`); the page works forks, merges and what is still live out
+itself. It starts from the best `[plan] options_default` lineups (30); chips widen it to `options_more` or everything.
+Tiles: big posters (2:3, up to 170 px, auto-fill grid so a desktop uses the width; `main.wide` lifts the 40rem cap on
+this route only), a score badge on each poster (hue red to green with the score; films at the `[display]
+glow_percentile` of rated films get a glow, computed server-side as `glow`; no real score shows a muted dash), tap or
+hover reveals Pick and Film page over the poster. Lines are an SVG measured from the DOM in the browser only
+(`edges()`); a line to a far row runs behind the tiles between. The stub-DOM smoke test skips lines, so check them
+by eye after layout changes. Plan list and plan pages link here.
 
 ## Score and why
 

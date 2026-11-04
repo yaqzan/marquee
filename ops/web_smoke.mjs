@@ -202,7 +202,7 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   const live = () => tiles().filter(e => !/(^| )dead( |$)/.test(e.className));
   const pickBtn = tile => tile.find(e => e.tag === 'button' && /ppick/.test(e.className))[0];
   const click = el => (el.ls.click || []).forEach(fn => fn());
-  check('paths page: three rows of poster tiles linking to film pages', app.find(e => /(^| )prow( |$)/.test(e.className)).length === 3 &&
+  check('paths page: rows by start time, one poster tile per session, linking to film pages', app.find(e => /(^| )prow( |$)/.test(e.className)).length >= 5 &&
     tiles().length > 6 && tiles().every(tl => tl.find(e => e.tag === 'a' && (e.attrs.href || '').startsWith('#/film/')).length === 2), String(tiles().length));
   check('paths API: top-percentile films carry the glow flag, and only they outrank the rest', api.nodes.some(n => n.glow) &&
     Math.min(...api.nodes.filter(n => n.glow).map(n => n.score)) >= Math.max(...api.nodes.filter(n => !n.glow).map(n => n.score)), '');
@@ -210,7 +210,7 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   check('paths page: every tile has a score badge, unrated ones a muted dash', badges.length === tiles().length &&
     badges.filter(b => /none/.test(b.className)).every(b => b.text().trim() === '–') && !app.text().includes('Unrated') &&
     badges.filter(b => !/none/.test(b.className)).every(b => /^\d+$/.test(b.text().trim()) && /hsl\(/.test(b.attrs.style)), badges.map(b => b.text()).join(','));
-  check('paths page: glow class only on flagged films', badges.filter(b => /glow/.test(b.className)).length === tiles().filter(tl => api.nodes.find(n => n.glow && tl.attrs['data-k'].endsWith(':' + n.session_id))).length, '');
+  check('paths page: glow class only on flagged films', badges.filter(b => /glow/.test(b.className)).length === tiles().filter(tl => api.nodes.find(n => n.glow && tl.attrs['data-k'] === String(n.session_id))).length, '');
   const frame0 = tiles()[0].find(e => /(^| )pframe( |$)/.test(e.className))[0];
   (frame0.ls.click || []).forEach(fn => fn());
   check('paths page: tapping a poster reveals its Pick overlay', /(^| )open( |$)/.test(tiles()[0].className), tiles()[0].className);
@@ -226,7 +226,7 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   t = app.text();
   const after = +(/(\d+) plans? still possible/.exec(t) || [0, 1])[1];
   check('picking a film narrows the plans and dims the others', after < before && live().length < tiles().length, `${before} -> ${after}`);
-  check('picked tile says Picked', pickBtn(app.find(e => /(^| )ptile( |$)/.test(e.className) && /(^| )on( |$)/.test(e.className))[0]).text() === 'Picked', '');
+  check('picked tile offers Release', pickBtn(app.find(e => /(^| )ptile( |$)/.test(e.className) && /(^| )on( |$)/.test(e.className))[0]).text() === 'Release', '');
   const picked = app.find(e => /(^| )ptile( |$)/.test(e.className) && /(^| )on( |$)/.test(e.className))[0];
   click(pickBtn(picked));
   check('tapping Picked releases it', +(/(\d+) plans? still possible/.exec(app.text()) || [0, -1])[1] === before, app.text().slice(0, 300));
@@ -239,4 +239,27 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   check('time cursor: back to the start restores them', +(/(\d+) plans? still possible/.exec(app.text()) || [0, -1])[1] === before, '');
   t = await go('#/plans');
   check('plans page links to every-option view for each trip day', app.find(e => e.tag === 'a' && (e.attrs.href || '').startsWith('#/paths/')).length === 4, '');
+}
+
+// ---- every option: each session appears once, rows run earliest to latest, a time label starts the day there
+{
+  const day = '2026-11-08';
+  const api = await (await fetch('/api/paths?day=' + day)).json();
+  await go('#/paths/' + day);
+  const tiles = () => app.find(e => /(^| )ptile( |$)/.test(e.className));
+  const keys = tiles().map(e => e.attrs['data-k']);
+  check('paths: every session is drawn exactly once', keys.length === new Set(keys).size && keys.length === new Set(api.lineups.slice(0, api.default_show).flatMap(L => L.s)).size, `${keys.length} tiles, ${new Set(keys).size} unique`);
+  const titles = tiles().map(e => e.find(a => /(^| )pname( |$)/.test(a.className))[0].text());
+  const byId = Object.fromEntries(api.nodes.map(n => [String(n.session_id), n]));
+  const starts = keys.map(k => byId[k].start);
+  check('paths: tiles run earliest to latest', starts.every((s, i) => i === 0 || starts[i - 1] <= s), starts.join(','));
+  const labels = app.find(e => e.tag === 'button' && /(^| )prowt( |$)/.test(e.className));
+  check('paths: a time label per row, in order', labels.length >= 5, String(labels.length));
+  const before = +(/(\d+) plans? still possible/.exec(app.text()) || [0, 0])[1];
+  const mid = labels[Math.floor(labels.length / 2)];
+  (mid.ls.click || []).forEach(fn => fn());
+  const mt = +(/(\d+) plans? still possible/.exec(app.text()) || [0, 0])[1];
+  check('paths: tapping a time starts the day there and drops earlier starts', mt < before && /Starting from/.test(app.text()), `${before} -> ${mt}`);
+  const dead = tiles().filter(e => /(^| )dead( |$)/.test(e.className)).length;
+  check('paths: tiles that cannot be part of a plan from there are dimmed', dead > 0, String(dead));
 }
