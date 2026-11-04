@@ -34,16 +34,13 @@ async function go(hash){
   await winLs.hashchange();
   return app.text();
 }
+const nPlans = (txt, dflt) => +((/(\d+) plans? still possible/.exec(txt) || /out of (\d+) you could make/.exec(txt) || [0, dflt])[1]);
 function check(name, cond, extra = ''){ console.log((cond ? 'PASS ' : 'FAIL ') + name + (cond ? '' : '  ' + extra)); if (!cond) process.exitCode = 1; }
 
 await new Promise(r => setTimeout(r, 600));
 check('festival name in header', fest.text().includes('Windsor International Film Festival'), fest.text());
 
-let t = await go('#/plans');
-check('plans: ranked ticket, titles title-cased', t.includes('Sat Nov 7') && t.includes('Extravagant Ways To Say Goodbye'.replace('To','to')) , t);
-check('plans: cost + top pick', t.includes('$57') && t.includes('top pick'), t);
-check('plans: span 9:00 am to 8:51 pm', t.includes('9:00 am to 8:51 pm'), t);
-
+let t = '';
 const planId = (await (await fetch('/api/plans')).json()).plans[0].id;
 t = await go('#/plan/' + planId);
 check('plan detail: times', t.includes('9:00 am') && t.includes('10:28 am') && t.includes('1:00 pm') && t.includes('6:25 pm') && t.includes('8:51 pm'), t);
@@ -238,26 +235,46 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   check('paths page: tapping again hides it', !/(^| )open( |$)/.test(tiles()[0].className), '');
   check('paths page: uses the wide column', /(^| )wide( |$)/.test(app.className), app.className);
   check('paths page: copy has no em-dash', !t.includes('—'), t.slice(0, 200));
-  const plansText = /(\d+) plans? still possible/.exec(t);
-  const before = +plansText[1];
+  const before = nPlans(t, 0);
   const firstTile = tiles()[0];
   click(pickBtn(firstTile));
   t = app.text();
-  const after = +(/(\d+) plans? still possible/.exec(t) || [0, 1])[1];
+  const after = nPlans(t, 1);
   check('picking a film narrows the plans and dims the others', after < before && live().length < tiles().length, `${before} -> ${after}`);
   check('picked tile offers Release', pickBtn(app.find(e => /(^| )ptile( |$)/.test(e.className) && /(^| )on( |$)/.test(e.className))[0]).text() === 'Release', '');
   const picked = app.find(e => /(^| )ptile( |$)/.test(e.className) && /(^| )on( |$)/.test(e.className))[0];
   click(pickBtn(picked));
-  check('tapping Picked releases it', +(/(\d+) plans? still possible/.exec(app.text()) || [0, -1])[1] === before, app.text().slice(0, 300));
+  check('tapping Picked releases it', nPlans(app.text(), -1) === before, app.text().slice(0, 300));
   // the time cursor: arriving late leaves fewer plans, moving it back restores them
   const slider = app.find(e => e.tag === 'input' && e.attrs.type === 'range')[0];
   slider.value = String(+slider.attrs.max); (slider.ls.input || []).forEach(fn => fn());
-  const late = +(/(\d+) plans? still possible/.exec(app.text()) || [0, 0])[1];
+  const late = nPlans(app.text(), 0);
   check('time cursor: free only from the latest first start leaves fewer plans', late < before, `${before} -> ${late}`);
   slider.value = slider.attrs.min; (slider.ls.input || []).forEach(fn => fn());
-  check('time cursor: back to the start restores them', +(/(\d+) plans? still possible/.exec(app.text()) || [0, -1])[1] === before, '');
+  check('time cursor: back to the start restores them', nPlans(app.text(), -1) === before, '');
   t = await go('#/plans');
-  check('plans page links to every-option view for each trip day', app.find(e => e.tag === 'a' && (e.attrs.href || '').startsWith('#/paths/')).length === 4, '');
+  const plansApi = await (await fetch('/api/plans')).json();
+  const bestDay = plansApi.plans.slice().sort((x, y) => x.rank - y.rank)[0].day;
+  const chipsOn = app.find(e => e.tag === 'button' && /(^| )chip( |$)/.test(e.className) && /(^| )on( |$)/.test(e.className)).map(e => e.text().trim());
+  check('Plans tab opens the timeline of the best-ranked day, no index of tickets', app.find(e => /(^| )pcanvas( |$)/.test(e.className)).length === 1 &&
+    app.find(e => /(^| )ticket( |$)/.test(e.className)).length === 0 && chipsOn.some(x => x.includes('Sat Nov 7')) && bestDay === '2026-11-07', chipsOn.join('|'));
+  const dayChips = app.find(e => e.tag === 'button' && /(^| )chip( |$)/.test(e.className) && /^(Sat|Sun) /.test(e.text().trim())).map(e => e.text().trim());
+  check('days sit across the top and only the best one says so', dayChips.length === 4 && dayChips.filter(x => x.includes('Best day')).length === 1 && dayChips.find(x => x.includes('Best day')).startsWith('Sat Nov 7'), dayChips.join('|'));
+  const rapi = await (await fetch('/api/paths?day=' + bestDay)).json();
+  const recTiles = app.find(e => /(^| )ptile( |$)/.test(e.className) && /(^| )rec( |$)/.test(e.className)).map(e => +e.attrs['data-k']);
+  check('the recommended plan is highlighted on the timeline (its three films, tagged Recommended)', JSON.stringify(recTiles.sort()) === JSON.stringify(rapi.lineups[0].s.slice().sort()) &&
+    app.find(e => /(^| )ptag( |$)/.test(e.className) && e.text().trim() === 'Recommended').length === 3, recTiles.join(','));
+  t = await go('#/paths/2026-11-08');
+  t = await go('#/plans');
+  check('the Plans tab returns to the day you were on', app.find(e => e.tag === 'h2')[0].text().includes('Sun Nov 8'), app.find(e => e.tag === 'h2').map(e => e.text()).join('|'));
+  const reset2 = app.find(e => e.tag === 'button' && e.text().trim() === 'Reset')[0];
+  (reset2.ls.click || []).forEach(fn => fn());
+  const firstRec = app.find(e => /(^| )ptile( |$)/.test(e.className) && /(^| )rec( |$)/.test(e.className))[0];
+  (firstRec.find(e => e.tag === 'button' && /ppick/.test(e.className))[0].ls.click || []).forEach(fn => fn());
+  check('after a pick the tag says Best from here', app.find(e => /(^| )ptag( |$)/.test(e.className)).some(e => e.text().trim() === 'Picked') &&
+    app.find(e => /(^| )ptag( |$)/.test(e.className)).some(e => e.text().trim() === 'Best from here'), app.find(e => /(^| )ptag( |$)/.test(e.className)).map(e => e.text()).join('|'));
+  (reset2.ls.click || []).forEach(fn => fn());
+  t = await go('#/paths/' + bestDay);
 }
 
 // ---- every option: each session appears once, rows run earliest to latest, a time label starts the day there
@@ -273,10 +290,10 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   check('paths: tiles run earliest to latest', starts.every((s, i) => i === 0 || starts[i - 1] <= s), starts.join(','));
   const labels = app.find(e => e.tag === 'button' && /(^| )paxl( |$)/.test(e.className));
   check('paths: an hour label down the axis, in order', labels.length >= 5, String(labels.length));
-  const before = +(/(\d+) plans? still possible/.exec(app.text()) || [0, 0])[1];
+  const before = nPlans(app.text(), 0);
   const mid = labels[Math.floor(labels.length / 2)];
   (mid.ls.click || []).forEach(fn => fn());
-  const mt = +(/(\d+) plans? still possible/.exec(app.text()) || [0, 0])[1];
+  const mt = nPlans(app.text(), 0);
   check('paths: tapping a time starts the day there and drops earlier starts', mt < before && /Starting from/.test(app.text()), `${before} -> ${mt}`);
   const dead = tiles().filter(e => /(^| )dead( |$)/.test(e.className)).length;
   check('paths: tiles that cannot be part of a plan from there are dimmed', dead > 0, String(dead));

@@ -175,50 +175,6 @@ function chip(label, on, onclick, extra) {
 
 // ---------------------------------------------------------------- views
 
-async function plansView() {
-  const [fest, plans] = await Promise.all([api('/api/festival'), api('/api/plans')]);
-  if (plans.plans.length) {
-    return screen(
-      h('h2', null, 'Your best days'),
-      h('p', { class: 'note' }, 'Ranked across your trip days.'),
-      plans.plans.map((p, i) => planTicket(p, i === 0)),
-      optionLinks(fest));
-  }
-  const trip = fest.days.filter(d => d.candidate);
-  screen(
-    h('h2', null, 'Your trip days'),
-    h('p', { class: 'note' }, 'Ranked day plans appear here once scoring is built. Until then, these are the days you can go.'),
-    trip.map(d => h('a', { class: 'ticket', href: '#/schedule/' + d.day },
-      h('div', { class: 'main' },
-        h('h3', null, fmtDay(d.day)),
-        h('p', { class: 'line' }, `${d.films} films across ${d.sessions} screenings`)),
-      h('div', { class: 'stub' },
-        h('div', { class: 'big' }, d.sessions),
-        h('div', { class: 'cap' }, 'screenings')))),
-    optionLinks(fest));
-}
-
-function optionLinks(fest) {
-  return [
-    h('h2', null, 'See every option'),
-    h('p', { class: 'note' }, 'All the film combinations that work for a day, with the paths that lead to the same choices joined up.'),
-    h('div', { class: 'chips' }, fest.days.filter(d => d.candidate).map(d => h('a', { class: 'chip trip', href: '#/paths/' + d.day }, fmtDay(d.day))))];
-}
-
-function planTicket(p, top) {
-  const titles = p.items.map(i => titleCase(i.title)).join(', ');
-  const first = p.items[0], last = p.items[p.items.length - 1];
-  const span = first && last ? `${fmtTime(first.starts_at)} to ${fmtMin(ts(last.starts_at).min + (last.runtime_min || 0))}` : '';
-  return h('a', { class: 'ticket' + (top ? ' top' : ''), href: '#/plan/' + p.id },
-    h('div', { class: 'main' },
-      h('h3', null, fmtDay(p.day)),
-      h('p', { class: 'line' }, titles),
-      h('p', { class: 'line' }, [span, p.cost_cents != null ? money(p.cost_cents) : ''].filter(Boolean).join(' · '))),
-    h('div', { class: 'stub' },
-      h('div', { class: 'big' }, p.rank),
-      h('div', { class: 'cap' }, top ? 'top pick' : 'rank')));
-}
-
 async function planView(id) {
   const data = await api('/api/plans');
   const p = data.plans.find(x => String(x.id) === String(id));
@@ -251,7 +207,7 @@ async function planView(id) {
     h('a', { class: 'back', href: '#/plans' }, '← Plans'),
     h('h2', null, fmtDay(p.day)),
     h('p', { class: 'note' }, [`#${p.rank}`, p.cost_cents != null ? money(p.cost_cents) : ''].filter(Boolean).join(' · ')),
-    h('a', { class: 'back', href: '#/paths/' + p.day }, 'See every option for this day →'),
+    h('a', { class: 'back', href: '#/paths/' + p.day }, 'Show on the timeline →'),
     h('div', { class: 'tl' }, events),
     p.summary ? h('div', { class: 'why' }, p.summary) : null);
 }
@@ -265,6 +221,7 @@ async function planView(id) {
 const pathState = {};
 const BCOL = ['#7a2f22', '#a8741a', '#3d5a6c', '#5a6b3a'];
 let relayout = null;
+let lastPathsDay = null;
 let openTile = null;
 const PX_MIN = 1.5;      // pixels per minute on the every-option time axis
 const HEAD = 62;         // height of the building headers above the time axis
@@ -301,9 +258,12 @@ function orderBuildings(bs, walk) {
 }
 
 async function pathsView(dayArg) {
-  const fest = await api('/api/festival');
+  const [fest, plansData] = await Promise.all([api('/api/festival'), api('/api/plans')]);
   const trip = fest.days.filter(d => d.candidate).map(d => d.day);
-  const day = trip.includes(dayArg) ? dayArg : trip[0];
+  const bestPlan = plansData.plans.slice().sort((x, y) => x.rank - y.rank)[0];
+  const bestDay = bestPlan && trip.includes(bestPlan.day) ? bestPlan.day : null;
+  const day = trip.includes(dayArg) ? dayArg : trip.includes(lastPathsDay) ? lastPathsDay : (bestDay || trip[0]);
+  lastPathsDay = day;
   const data = await api('/api/paths?day=' + day);
   const nodes = Object.fromEntries(data.nodes.map(n => [n.session_id, n]));
   const walk = data.buffers.walk, walkM = data.buffers.walk_m || {};
@@ -332,7 +292,7 @@ async function pathsView(dayArg) {
     if (p.length) st.t = null;
     render();
   }
-  function startAt(t) { st.t = t; st.picks = []; render(); }
+  function startAt(t) { st.t = t <= tMin ? null : t; st.picks = []; render(); }
 
   // The plans you could still make if you picked this film (on top of what is already picked, unless that clashes).
   function consequence(sid) {
@@ -350,6 +310,10 @@ async function pathsView(dayArg) {
     const picked = st.picks.length > 0;
     const live = base.filter(L => has(L, st.picks) && (picked || afterStart(L)));
     const liveSet = new Set(live.flatMap(L => L.s));
+    const rec = live[0] || null;  // the recommended plan: the best one still possible
+    const recSet = new Set(rec ? rec.s : []);
+    const recPairs = new Set(rec ? rec.s.slice(0, -1).map((a, i) => a + '>' + rec.s[i + 1]) : []);
+    const recLabel = picked || st.t != null ? 'Best from here' : 'Recommended';
     const cursor = picked ? Math.max(...st.picks.map(s => nodes[s].end)) : st.t;
     cursorEl.textContent = cursor == null ? 'Any start time' : (picked ? 'Free again at ' : 'Starting from ') + fmtMin(cursor);
     slider.value = cursor == null ? tMin : Math.min(tMax, Math.max(tMin, cursor));
@@ -421,12 +385,12 @@ async function pathsView(dayArg) {
     ids.forEach(sid => {
       const n = nodes[sid], on = st.picks.includes(sid), alive = liveSet.has(sid);
       const key = titleCase(n.title), c = col[n.building];
-      const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), 'data-k': String(sid), 'data-start': n.start, 'data-end': n.end, 'data-building': n.building,
+      const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead') + (recSet.has(sid) ? ' rec' : ''), 'data-k': String(sid), 'data-start': n.start, 'data-end': n.end, 'data-building': n.building,
         style: `left:calc(var(--ax) + ${c.laneBase + laneOf[sid]} * ${unit} + ${c.gapPx}px);top:${y(n.start)}px;height:${blockH[sid]}px` },
         poster(n.poster, key, 'pt'),
         h('div', { class: 'pcap' }, h('b', null, key), h('span', null, `${fmtMin(n.start)} – ${fmtMin(n.end)}`)),
         scoreBadge(n),
-        on ? h('div', { class: 'pmark' }, 'Picked') : null,
+        on ? h('div', { class: 'ptag picked' }, 'Picked') : recSet.has(sid) ? h('div', { class: 'ptag' }, recLabel) : null,
         h('div', { class: 'pover' },
           h('div', { class: 'phome' }, 'Home about ' + fmtMin(n.end + data.drive_min)),
           badges(n, false),
@@ -455,14 +419,17 @@ async function pathsView(dayArg) {
     live.forEach(L => L.s.slice(0, -1).forEach((a, i) => livePairs.add(a + '>' + L.s[i + 1])));
     canvas.setAttribute('data-edges', pairs.join(' '));
     scroller.replaceChildren(canvas);
-    relayout = () => { edges(canvas, pairs, livePairs, st.picks, nodes, walkMin); applyFocus(); };
+    relayout = () => { edges(canvas, pairs, livePairs, st.picks, nodes, walkMin, recPairs); applyFocus(); };
 
     const best = live[0];
     const lines = [];
     if (!live.length) lines.push(h('p', { class: 'note' }, 'No full plan fits this. Move the time earlier, or tap Release on a picked film.'));
     else {
       const full = st.picks.length >= 3;
-      lines.push(h('p', { class: 'note' }, full ? 'Your plan' : `${live.length} ${live.length === 1 ? 'plan' : 'plans'} still possible. Best from here:`));
+      const stored = plansData.plans.find(x => x.day === day);
+      const same = stored && stored.items.map(i => i.session_id).join() === best.s.join();
+      lines.push(h('p', { class: 'note' }, full ? 'Your plan' : picked || st.t != null ? `${live.length} ${live.length === 1 ? 'plan' : 'plans'} still possible. Best from here:` : `Recommended plan, out of ${live.length} you could make:`,
+        same ? [' ', h('a', { href: '#/plan/' + stored.id }, 'Day plan details')] : null));
       lines.push(h('div', { class: 'why' },
         best.s.map((sid, k) => [k ? h('div', { class: 'meta gap' }, `${nodes[sid].start - nodes[best.s[k - 1]].end} min between${nodes[sid].building !== nodes[best.s[k - 1]].building ? `, including a ${walkMin(nodes[sid].building, nodes[best.s[k - 1]].building)} min walk` : ''}`) : null,
           h('div', null, `${fmtMin(nodes[sid].start)} – ${fmtMin(nodes[sid].end)}  `, h('a', { href: '#/film/' + nodes[sid].film_id }, titleCase(nodes[sid].title)), ` · ${nodes[sid].building}`)]),
@@ -480,9 +447,8 @@ async function pathsView(dayArg) {
   slider.addEventListener('input', () => startAt(+slider.value));
 
   screen(
-    h('a', { class: 'back', href: '#/plans' }, '← Plans'),
-    h('h2', null, 'Every option: ' + fmtDay(day)),
-    h('div', { class: 'chips' }, trip.map(d => chip(fmtDay(d), d === day, () => { location.hash = '#/paths/' + d; }, 'trip'))),
+    h('div', { class: 'chips' }, trip.map(d => chip(fmtDay(d) + (d === bestDay ? ' · Best day' : ''), d === day, () => { location.hash = '#/paths/' + d; }, 'trip'))),
+    h('h2', null, fmtDay(day)),
     h('p', { class: 'note' }, 'One column per building, the closest ones side by side, and the gap between them as wide as the walk. Time runs down the page and a film is as tall as it runs. Hover or tap a film: the plans you could still make light up with their routes, and every film you could no longer see goes grey. Tap an hour to start your day there, or drag the slider.'),
     h('div', { class: 'pbar' }, cursorEl, slider, allBtn,
       h('button', { type: 'button', class: 'chip', onclick: () => { st.picks = []; st.t = null; render(); } }, 'Reset')),
@@ -495,7 +461,7 @@ async function pathsView(dayArg) {
 // The routes, measured from the DOM (browser only: needs layout). Each is an elbow with rounded corners from the bottom of
 // a film down to the top of a later one, ending in an arrow, with a halo so it reads over a poster. The pill says the
 // break (and the walk if the building changes). Which lines show is decided by applyFocus and the All lines chip.
-function edges(canvas, pairs, livePairs, picks, nodes, walkMin) {
+function edges(canvas, pairs, livePairs, picks, nodes, walkMin, recPairs) {
   if (!canvas.getBoundingClientRect || !document.createElementNS) return;
   const box = canvas.getBoundingClientRect();
   const at = {};
@@ -520,7 +486,7 @@ function edges(canvas, pairs, livePairs, picks, nodes, walkMin) {
     const live = livePairs.has(k), hi = live && (picks.includes(+a) || picks.includes(+b));
     const { d, lx, ly } = route(x1, y1, x2, y2);
     const na = nodes[a], nb = nodes[b], gap = nb.start - na.end, wk = walkMin(na.building, nb.building);
-    const g = svgEl('g', { class: 'pw' + (live ? ' live' : '') + (hi ? ' hi' : ''), 'data-a': a, 'data-b': b });
+    const g = svgEl('g', { class: 'pw' + (live ? ' live' : '') + (hi ? ' hi' : '') + (recPairs.has(k) ? ' rec' : ''), 'data-a': a, 'data-b': b });
     g.appendChild(svgEl('path', { d, class: 'pwh' }));
     g.appendChild(svgEl('path', { d, class: 'pe', 'marker-end': 'url(#parr)' }));
     g.appendChild(svgEl('circle', { cx: x1, cy: y1, r: 4, class: 'pd' }));
@@ -670,7 +636,7 @@ async function scheduleView(day) {
 // ---------------------------------------------------------------- router
 
 const routes = [
-  [/^#\/plans$/, plansView, 'plans'],
+  [/^#\/plans$/, pathsView, 'plans'],
   [/^#\/plan\/(\d+)$/, planView, 'plans'],
   [/^#\/paths(?:\/(\d{4}-\d{2}-\d{2}))?$/, pathsView, 'plans'],
   [/^#\/films$/, filmsView, 'films'],

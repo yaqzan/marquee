@@ -13,14 +13,16 @@ Palette and fonts are CSS variables at the top of `marquee.css`: paper `#f3e9d2`
 
 ## Routes (hash router in marquee.js)
 
-`#/plans` (ranked plan tickets; until plans exist, the four trip days with screening counts) ·
-`#/paths[/<YYYY-MM-DD>]` (every option for a trip day, see below) ·
-`#/plan/<id>` (timeline: films, free-time gaps labelled lunch/dinner by overlap with 11:30-14:30 and
-16:30-20:00) · `#/films` (filters: trip days / all / one day, title search, genre; sort: A to Z, highest score with
+`#/plans` (the Plans tab IS the timeline, owner decision 2026-11-04: no index of plan tickets before it; opens on the day you
+were last on, else the best-ranked day from `/api/plans`) · `#/paths[/<YYYY-MM-DD>]` (the same timeline for a given day;
+the day chips across the top switch day and mark the best one) ·
+`#/plan/<id>` (the stored day plan's timeline: films, free-time gaps labelled lunch/dinner by overlap with 11:30-14:30 and
+16:30-20:00; reached from "Day plan details" under the timeline when the stored plan is the recommended one) · `#/films`
+(filters: trip days / all / one day, title search, genre; sort: A to Z, highest score with
 Unrated films always last, earliest showtime within the chosen days; filters and sort persist while the tab is open) · `#/film/<ST id>` ·
 `#/schedule[/<YYYY-MM-DD>]` (one day, grouped by building).
 
-## Every option (`#/paths/<day>`, `pathsView` in marquee.js)
+## The timeline (`#/plans`, `#/paths/<day>`, `pathsView` in marquee.js)
 
 A map of the day (owner decisions, 2026-11-04). **Across: one column group per building**, ordered by walking distance
 (`orderBuildings`: the two furthest apart at the ends, so the middle building really is between), and **the space between
@@ -30,7 +32,9 @@ minute; a film is a block whose top is its start and whose height is its running
 session. Tap an hour label or drag the slider to start your day there (earlier time is shaded, a dashed line marks it).
 **Hover or tap a film = what picking it would mean**: the plans you could still make with it (on top of current picks,
 unless they clash) light up with their routes, and every film you could no longer see goes grey (`.unrel`, grayscale).
-Tap pins it and opens Pick / Film page / source badges over the poster. Picking moves the cursor to when the pick ends.
+Tap pins it and opens Pick / Film page / source badges over the poster. Picking moves the cursor to when the pick ends. **The recommended plan is highlighted**: its three films get a gold border and a
+"Recommended" tag and its two routes stay drawn in gold with their break pills, even with no lines showing. It is the best plan still
+possible, so after a pick or a start time the tag reads "Best from here"; a picked film is tagged Picked (ink border).
 Routes: rounded elbow lines from where a film ends to where a later one starts, an arrow at the end, a paper halo so they
 read over posters, dashed for the part before the focused film, and a pill on the lines touching it saying the break and
 the walk ("142 min, 4 min walk"). **No lines until you hover or tap** (all of them at once looked like tangled wire); the
