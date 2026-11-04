@@ -2,8 +2,8 @@
 
 A day has about 30 sessions, so every valid lineup is enumerated (depth-first, films in start order) and the
 best kept; no solver. A lineup is valid when:
-  - each film starts after the previous one ends plus the walking buffer (small inside a building, larger
-    between buildings), and no film repeats;
+  - each film starts after the previous one ends plus the walking buffer (a turnaround inside a building, that plus the
+    walk between buildings), and no film repeats;
   - the first film starts no earlier than `earliest_start` and the last ends by `latest_end` (home by 1 am);
   - total runtime is within `max_total_runtime_min`;
   - a free block of `meal_min_gap_min` fits inside BOTH the lunch and the dinner window (free time = the
@@ -75,7 +75,12 @@ def load_day(conn, cfg: dict, day: str) -> list[Cand]:
 
 
 def buffer(a: Cand, b: Cand, p: dict) -> int:
-    return p["buffer_same_building_min"] if a.building == b.building else p["buffer_between_buildings_min"]
+    """Minutes needed between one film ending and the next starting: the same-building turnaround, plus the
+    walk when the buildings differ (the pair's walking time from config, else the flat fallback)."""
+    if a.building == b.building:
+        return p["buffer_same_building_min"]
+    walk = p.get("walk_min", {}).get(" | ".join(sorted((a.building, b.building))))
+    return p["buffer_between_buildings_min"] if walk is None else p["buffer_same_building_min"] + walk
 
 
 def similarity(a: Cand, b: Cand) -> float:

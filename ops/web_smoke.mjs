@@ -192,7 +192,7 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   check('paths API: every lineup respects the configured walking buffers and film order', api.lineups.every(L => L.s.every((s, i) => {
     if (!i) return true;
     const a = byId[L.s[i - 1]], b = byId[s];
-    return b.start >= a.end + (a.building === b.building ? api.buffers.same : api.buffers.between);
+    return b.start >= a.end + (a.building === b.building ? api.buffers.same : api.buffers.same + (api.buffers.walk[[a.building, b.building].sort().join(' | ')] ?? (api.buffers.fallback - api.buffers.same)));
   })), '');
   check('paths API: a non-trip day is refused', (await fetch('/api/paths?day=2026-11-04')).status === 404, '');
   check('paths API: bad day is a 400', (await fetch('/api/paths?day=x')).status === 400, '');

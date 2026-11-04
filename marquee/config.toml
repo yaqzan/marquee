@@ -34,12 +34,16 @@ latest_end = "22:45"            # + drive_hours = home by 1 am
 drive_hours = 2.0               # each way
 home_label = "home"            # how plan text names where you drive from (set it in config.local.toml)
 arrival_buffer_min = 30         # parked and in the lobby before the first film
-buffer_same_building_min = 20   # out, restroom, popcorn, find the next seat, inside one building
-buffer_between_buildings_min = 30  # the same plus the walk or a move of the car
+buffer_same_building_min = 15   # out, restroom, popcorn, find the next seat (owner, 2026-11-04)
+buffer_between_buildings_min = 30  # fallback for a building pair missing from [plan.walk_min]
 meal_min_gap_min = 60           # a free block this long must fall inside each meal window
 lunch_window = ["11:30", "14:30"]
 dinner_window = ["16:30", "20:00"]
 max_total_runtime_min = 480     # fatigue cap
+# Between buildings the gap is buffer_same_building_min plus the walk below. Walking minutes from OpenStreetMap
+# foot routing (OSRM, 2026-11-04; Capitol 232 m / 3.1 min to Armouries, 277 m / 3.7 min to Chrysler, Armouries to
+# Chrysler 474 m / 6.3 min), rounded up. Google Maps was not used: it needs a billing key. Re-run the lookup if a
+# venue moves. Keys are the two building names, sorted, joined by " | ".
 # Prices (HST incl.). A premium screening is any film tagged premium_tag_code; the pass does not cover them.
 options_default = 30            # lineups the branching view starts from (best first); the rest sit behind "Show more"
 options_more = 100
@@ -47,6 +51,11 @@ price_single_cents = 1900
 price_premium_cents = 4000
 price_premium_3pack_cents = 9900
 premium_tag_code = "0000000115"
+
+[plan.walk_min]
+"Armouries | Capitol Theatre" = 4
+"Capitol Theatre | Chrysler Theatre" = 4
+"Armouries | Chrysler Theatre" = 7
 
 [score]
 # score = (sum of source scores weighted + prior_weight * prior) / (sum of weights + prior_weight), 0-100.

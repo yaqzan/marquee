@@ -214,7 +214,8 @@ def paths(c, day: str) -> dict | None:
         n["why"] = score_view(c, cfg, n["film_id"], labels)
         m = md.get(n["film_id"], {})
         n["poster"] = m.get("poster")
-    out["buffers"] = {"same": cfg["plan"]["buffer_same_building_min"], "between": cfg["plan"]["buffer_between_buildings_min"]}
+    out["buffers"] = {"same": cfg["plan"]["buffer_same_building_min"], "walk": cfg["plan"].get("walk_min", {}),
+                      "fallback": cfg["plan"]["buffer_between_buildings_min"]}
     out["default_show"], out["more_show"] = cfg["plan"]["options_default"], cfg["plan"]["options_more"]
     return out
 
