@@ -58,8 +58,8 @@ taste, so plans lean on festival pedigree and consensus where critic data exists
 ## Planner (marquee/planner.py, config [plan])
 
 Exhaustive search (depth-first, films in start order, ~30 sessions a day) for the best 3-film lineup per day.
-Valid = gaps between films (15 min inside a building; between buildings 15 plus the walk, `[plan.walk_min]`, from OSM foot routing), first start >= 09:00, last end <= 22:45 (home by
-1 am after a 2 h drive), runtime <= 8 h, and a 60 min free block inside both the lunch (11:30-14:30) and dinner
+Valid = gaps between films (15 min inside a building; between buildings 15 plus the walk, `[plan.walk_min]`, from OSM foot routing), first start >= 09:00, no cut-off on the last film's end
+(`latest_end` = 30:00; owner, 2026-11-04: the view shows when you would be home instead), runtime <= 8 h, and a 60 min free block inside both the lunch (11:30-14:30) and dinner
 (16:30-20:00) windows. Lineup score = mean film score - 6 * mean pairwise similarity (same genre, shared country).
 Cost: $19 single, $40 premium (tag 0000000115), premium 3-pack $99 only when it beats three $40s. Plans are
 derived: `marquee plan` deletes and rewrites `plan` / `plan_item`. Only the closer *The Debut* (Sun Nov 8, 6 pm)

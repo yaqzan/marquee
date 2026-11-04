@@ -4,7 +4,7 @@ A day has about 30 sessions, so every valid lineup is enumerated (depth-first, f
 best kept; no solver. A lineup is valid when:
   - each film starts after the previous one ends plus the walking buffer (a turnaround inside a building, that plus the
     walk between buildings), and no film repeats;
-  - the first film starts no earlier than `earliest_start` and the last ends by `latest_end` (home by 1 am);
+  - the first film starts no earlier than `earliest_start` and the last ends by `latest_end` (config: effectively no cutoff; the view shows the time home);
   - total runtime is within `max_total_runtime_min`;
   - a free block of `meal_min_gap_min` fits inside BOTH the lunch and the dinner window (free time = the
     gap between films less the walking buffer, plus the time before the first and after the last).
@@ -163,7 +163,7 @@ def options(conn, cfg: dict, day: str) -> dict:
     p = cfg["plan"]
     late = hhmm(p["latest_end"])
     skipped = [{"session_id": c.session_id, "film_id": c.film_id, "title": c.title, "start": c.start, "end": c.end,
-                "reason": (f"ends after {fmt(late)}, too late to be home by 1 am" if c.end > late
+                "reason": (f"ends after {fmt(late)}, too late to be home by {fmt(late + p['drive_hours'] * 60)}" if c.end > late
                            else "no valid 3-film plan includes it (the others around it clash or leave no meal break)")}
                for c in cands if c.session_id not in nodes]
     return {"day": day, "nodes": list(nodes.values()), "skipped": skipped,

@@ -249,6 +249,7 @@ def paths(c, day: str) -> dict | None:
         n["poster"], n["ratings"] = m.get("poster"), m.get("ratings", [])
     out["buffers"] = {"same": cfg["plan"]["buffer_same_building_min"], "walk": cfg["plan"].get("walk_min", {}),
                       "fallback": cfg["plan"]["buffer_between_buildings_min"]}
+    out["drive_min"] = round(cfg["plan"]["drive_hours"] * 60)
     out["default_show"], out["more_show"] = cfg["plan"]["options_default"], cfg["plan"]["options_more"]
     return out
 

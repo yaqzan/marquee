@@ -54,8 +54,10 @@ class TestRules(unittest.TestCase):
                  c(4, "20:30", 130)]                                                     # ends 22:40: ok
         got = best_lineups(cands, CFG)
         self.assertTrue(all(len({x.film_id for x in r["lineup"]}) == 3 for r in got))
-        late = [c(1, "09:00", 90), c(2, "13:00", 90), c(3, "21:30", 90)]                 # ends 23:00
-        self.assertEqual(best_lineups(late, CFG), [])
+        late = [c(1, "09:00", 90), c(2, "13:00", 90), c(3, "22:45", 90)]                 # ends 00:15
+        capped = {**CFG, "plan": {**P, "latest_end": "23:00"}}                          # the cut-off still works when set
+        self.assertEqual(best_lineups(late, capped), [])
+        self.assertTrue(best_lineups(late, CFG))                                          # and the shipped config has none
 
     def test_diversity_prefers_unlike_films(self):
         same = [c(1, "09:00", 90, genre="doc", country="ca"), c(2, "13:00", 90, genre="doc", country="ca"),

@@ -28,11 +28,11 @@ that overlap sit side by side in lanes. One block per session. A line leaves the
 arrives at the top of a film that starts later, with a dot at each end, and is only drawn for consecutive films of a live
 lineup. This replaced rows grouped by start time, which put a film that starts at 3:30 between a 2:50 film and the 6:20 film
 its line really went to, so the line looked like it hit the wrong film. Never lay films out by start time alone again.
-Tapping a film lights up its own lines (blue) and fades the rest. Starting at 3 pm = tap the 3 pm label or drag the slider:
+**No wires by default** (owner, 2026-11-04: the full set looked like tangled wire). Tapping a film shows only its own lines (blue; dashed from what can come before, solid to what can follow) and lights the films at the other ends while the rest step back; an All lines chip brings every connection back, faint. A picked film keeps its lines in gold. Starting at 3 pm = tap the 3 pm label or drag the slider:
 lineups with a film before then drop out, earlier time is shaded and a dashed line marks it. Picking moves the cursor to
 when the pick ends; picks narrow the plans to those containing all of them. Merges are films with several lines arriving.
-`/api/paths?day=` (trip days only) returns every valid lineup (planner rules: gaps, meals, 1 am home, no repeat) best
-first, the sessions in them, and `skipped`: the day's sessions in no plan with the reason (listed under the chart).
+`/api/paths?day=` (trip days only) returns every valid lineup (planner rules: gaps, meals, no repeat; no late cut-off, the tile and plan card say when you would be home) best
+first, the sessions in them, and `skipped`: the day's sessions in no plan with the reason (`drive_min` lets the page show the time home) (listed under the chart).
 It starts from the best `[plan] options_default` lineups (30); chips widen it to `options_more` or everything.
 Tiles: poster as the block, score badge (hue red to green; films at `[display] glow_percentile` of rated films glow, the
 server's `glow` flag; no real score shows a muted dash), title and times on a scrim, tap or hover for the source badges,

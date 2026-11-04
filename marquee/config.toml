@@ -30,7 +30,7 @@ title_re = "(?i)\\b(pass|ticket)\\b"
 candidate_days = ["2026-10-31", "2026-11-01", "2026-11-07", "2026-11-08"]
 films_per_day = 3
 earliest_start = "09:00"
-latest_end = "22:45"            # + drive_hours = home by 1 am
+latest_end = "30:00"            # no real cutoff (owner, 2026-11-04: show every option, the view says when you would be home)
 drive_hours = 2.0               # each way
 home_label = "home"            # how plan text names where you drive from (set it in config.local.toml)
 arrival_buffer_min = 30         # parked and in the lobby before the first film

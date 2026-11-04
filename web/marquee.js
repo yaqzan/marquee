@@ -266,6 +266,7 @@ const pathState = {};
 const BCOL = ['#7a2f22', '#a8741a', '#3d5a6c', '#5a6b3a'];
 let relayout = null;
 let openTile = null;
+let focusSid = null;
 const PX_MIN = 1.5;      // pixels per minute on the every-option time axis
 const MIN_BLOCK = 104;   // a film is never drawn shorter than this, so its poster and buttons stay usable
 
@@ -296,7 +297,7 @@ async function pathsView(dayArg) {
   const nodes = Object.fromEntries(data.nodes.map(n => [n.session_id, n]));
   const buildings = [...new Set(data.nodes.map(n => n.building))].sort();
   const bcol = b => BCOL[buildings.indexOf(b) % BCOL.length];
-  const st = pathState[day] || (pathState[day] = { picks: [], t: null, show: data.default_show });
+  const st = pathState[day] || (pathState[day] = { picks: [], t: null, show: data.default_show, all: false });
   const starts = data.nodes.map(n => n.start);
   const tMin = Math.floor(Math.min(...starts, 1440) / 30) * 30, tMax = Math.max(...starts, 0);
   const scroller = h('div', { class: 'pscroll' });
@@ -304,6 +305,7 @@ async function pathsView(dayArg) {
   const cursorEl = h('span', { class: 'pcur' });
   const slider = h('input', { type: 'range', min: tMin, max: tMax, step: 5, value: st.t == null ? tMin : st.t, 'aria-label': 'Free from' });
   const showEl = h('div', { class: 'chips' });
+  const allBtn = h('button', { type: 'button', class: 'chip', onclick: () => { st.all = !st.all; render(); } }, 'All lines');
 
   const baseOf = () => data.lineups.slice(0, st.show);
   const has = (L, p) => p.every(x => L.s.includes(x));
@@ -319,6 +321,8 @@ async function pathsView(dayArg) {
 
   function render() {
     openTile = null;
+    focusSid = null;
+    allBtn.classList.toggle('on', st.all);
     const base = baseOf();
     const picked = st.picks.length > 0;
     const live = base.filter(L => has(L, st.picks) && (picked || st.t == null || L.s.every(s => nodes[s].start >= st.t)));
@@ -344,7 +348,7 @@ async function pathsView(dayArg) {
       laneOf[id] = k;
     });
     const y = t => Math.round((t - t0) * PX_MIN);
-    const canvas = h('div', { class: 'pcanvas', style: `--lanes:${lanes.length};height:${y(tEnd) + 24}px` });
+    const canvas = h('div', { class: 'pcanvas' + (st.all ? ' all' : ''), style: `--lanes:${lanes.length};height:${y(tEnd) + 24}px` });
 
     for (let t = t0; t <= tEnd; t += 60) {
       canvas.appendChild(h('div', { class: 'pgrid', style: `top:${y(t)}px` }));
@@ -362,6 +366,7 @@ async function pathsView(dayArg) {
         scoreBadge(n),
         on ? h('div', { class: 'pmark' }, 'Picked') : null,
         h('div', { class: 'pover' },
+          h('div', { class: 'phome' }, 'Home about ' + fmtMin(n.end + data.drive_min)),
           badges(n, false),
           h('button', { type: 'button', class: 'ppick', 'aria-pressed': on ? 'true' : 'false', onclick: e => { if (e) e.stopPropagation(); pick(sid); } }, on ? 'Release' : 'Pick'),
           h('a', { class: 'pgo', href: '#/film/' + n.film_id, onclick: e => { if (e) e.stopPropagation(); } }, 'Film page')));
@@ -396,7 +401,7 @@ async function pathsView(dayArg) {
       lines.push(h('div', { class: 'why' },
         best.s.map((sid, k) => [k ? h('div', { class: 'meta gap' }, `${nodes[sid].start - nodes[best.s[k - 1]].end} min between${nodes[sid].building !== nodes[best.s[k - 1]].building ? ', and a walk' : ''}`) : null,
           h('div', null, `${fmtMin(nodes[sid].start)} – ${fmtMin(nodes[sid].end)}  `, h('a', { href: '#/film/' + nodes[sid].film_id }, titleCase(nodes[sid].title)), ` · ${nodes[sid].building}`)]),
-        h('div', { class: 'meta' }, `Score ${best.score.toFixed(1)} · ${money(best.cost)} · ${best.changes ? best.changes + ' building change' + (best.changes > 1 ? 's' : '') : 'all in one building'}`)));
+        h('div', { class: 'meta' }, `Score ${best.score.toFixed(1)} · ${money(best.cost)} · ${best.changes ? best.changes + ' building change' + (best.changes > 1 ? 's' : '') : 'all in one building'} · home about ${fmtMin(nodes[best.s[best.s.length - 1]].end + data.drive_min)}`)));
     }
     sum.replaceChildren(...lines);
     showEl.replaceChildren(
@@ -413,8 +418,8 @@ async function pathsView(dayArg) {
     h('a', { class: 'back', href: '#/plans' }, '← Plans'),
     h('h2', null, 'Every option: ' + fmtDay(day)),
     h('div', { class: 'chips' }, trip.map(d => chip(fmtDay(d), d === day, () => { location.hash = '#/paths/' + d; }, 'trip'))),
-    h('p', { class: 'note' }, 'Time runs down the page and a film is as tall as it runs, so where it ends is where its lines leave from. A line goes from a film to one that can follow it, with time to get out, grab popcorn and walk over. Tap a film for Pick and its page, and its own lines light up. Tap an hour to start your day there, or drag the slider.'),
-    h('div', { class: 'pbar' }, cursorEl, slider,
+    h('p', { class: 'note' }, 'Time runs down the page and a film is as tall as it runs, so where it ends is where its lines leave from. A line goes from a film to one that can follow it, with time to get out, grab popcorn and walk over. Tap a film for Pick and its page: the films that can come before and after it light up and only its own lines show. Turn on All lines to see every connection at once. Tap an hour to start your day there, or drag the slider.'),
+    h('div', { class: 'pbar' }, cursorEl, slider, allBtn,
       h('button', { type: 'button', class: 'chip', onclick: () => { st.picks = []; st.t = null; render(); } }, 'Reset')),
     h('div', { class: 'pleg' }, buildings.map(b => h('span', null, h('span', { class: 'bdot', style: 'background:' + bcol(b) }), b))),
     scroller, sum, h('p', { class: 'meta' }, 'Show:'), showEl,
@@ -423,14 +428,22 @@ async function pathsView(dayArg) {
   render();
 }
 
-// Light up one film's own lines (the ones leaving it and arriving at it) and fade the rest. Browser only.
+// One film in focus: its own lines show (solid to what can follow it, dashed from what can come before it), the films
+// on the other end of them stay lit and everything else steps back. Browser only.
 function focusEdges(canvas, sid) {
   if (!canvas.querySelectorAll) return;
+  focusSid = sid;
+  const key = sid == null ? null : String(sid);
+  const rel = new Set(key == null ? [] : [key]);
   canvas.querySelectorAll('.pe, .pd').forEach(el => {
-    const mine = sid != null && (el.getAttribute('data-a') === String(sid) || el.getAttribute('data-b') === String(sid));
+    const a = el.getAttribute('data-a'), b = el.getAttribute('data-b');
+    const mine = key != null && (a === key || b === key);
+    if (mine) { rel.add(a); rel.add(b); }
     el.classList.toggle('focus', mine);
-    el.classList.toggle('faint', sid != null && !mine);
+    el.classList.toggle('pre', mine && b === key);
   });
+  canvas.classList.toggle('focused', key != null);
+  canvas.querySelectorAll('.ptile').forEach(t => t.classList.toggle('unrel', key != null && !rel.has(t.dataset.k)));
 }
 
 // The lines, measured from the DOM (browser only: needs layout). Each runs from the bottom of a film to the top of a
@@ -454,6 +467,7 @@ function edges(canvas, pairs, picks) {
   const old = canvas.querySelector('.pedges');
   if (old) old.remove();
   canvas.appendChild(svg);
+  focusEdges(canvas, focusSid);  // a redraw (resize, late layout) keeps the film in focus
 }
 
 const filmState = { day: 'trip', q: '', genre: '', sort: 'az' };
