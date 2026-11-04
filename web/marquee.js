@@ -266,6 +266,8 @@ const pathState = {};
 const BCOL = ['#7a2f22', '#a8741a', '#3d5a6c', '#5a6b3a'];
 let relayout = null;
 let openTile = null;
+const PX_MIN = 1.5;      // pixels per minute on the every-option time axis
+const MIN_BLOCK = 104;   // a film is never drawn shorter than this, so its poster and buttons stay usable
 
 // Score badge on a poster: colour runs red to green with the score; the top percentile (server's `glow` flag) glows;
 // a film with nothing behind its number gets a muted dash instead of a default 50.
@@ -297,7 +299,7 @@ async function pathsView(dayArg) {
   const st = pathState[day] || (pathState[day] = { picks: [], t: null, show: data.default_show });
   const starts = data.nodes.map(n => n.start);
   const tMin = Math.floor(Math.min(...starts, 1440) / 30) * 30, tMax = Math.max(...starts, 0);
-  const wrap = h('div', { class: 'pwrap' });
+  const scroller = h('div', { class: 'pscroll' });
   const sum = h('div', { class: 'psum' });
   const cursorEl = h('span', { class: 'pcur' });
   const slider = h('input', { type: 'range', min: tMin, max: tMax, step: 5, value: st.t == null ? tMin : st.t, 'aria-label': 'Free from' });
@@ -325,42 +327,65 @@ async function pathsView(dayArg) {
     cursorEl.textContent = cursor == null ? 'Any start time' : (picked ? 'Free again at ' : 'Starting from ') + fmtMin(cursor);
     slider.value = cursor == null ? tMin : Math.min(tMax, Math.max(tMin, cursor));
 
-    // one tile per session, earliest first; films starting within 15 minutes of each other share a row
-    const ids = [...new Set(base.flatMap(L => L.s))].sort((a, b) => nodes[a].start - nodes[b].start || a - b);
-    const rows = [];
+    // A real time axis: a film is a block whose top is its start and whose height is its running time, so what you
+    // see ending is what a line leaves from, and a line can only run downward to a film that starts later.
+    const ids = [...new Set(base.flatMap(L => L.s))].sort((a, b) => nodes[a].start - nodes[b].start || nodes[a].end - nodes[b].end || a - b);
+    const t0 = Math.floor(Math.min(...ids.map(i => nodes[i].start), 1440) / 60) * 60;
+    const tEnd = Math.ceil(Math.max(...ids.map(i => nodes[i].end), 0) / 60) * 60;
+    const lanes = [];  // end of the last block in each lane; side by side films take the next lane
+    const laneOf = {}, blockH = {};
     ids.forEach(id => {
-      const last = rows[rows.length - 1];
-      if (last && nodes[id].start - last.t <= 15) last.ids.push(id); else rows.push({ t: nodes[id].start, ids: [id] });
+      const n = nodes[id];
+      blockH[id] = Math.max(MIN_BLOCK, Math.round((n.end - n.start) * PX_MIN));
+      const lastEnd = n.start * PX_MIN + blockH[id];
+      let k = lanes.findIndex(e => e <= n.start * PX_MIN);
+      if (k < 0) { k = lanes.length; lanes.push(0); }
+      lanes[k] = lastEnd;
+      laneOf[id] = k;
     });
+    const y = t => Math.round((t - t0) * PX_MIN);
+    const canvas = h('div', { class: 'pcanvas', style: `--lanes:${lanes.length};height:${y(tEnd) + 24}px` });
 
-    const tileFor = sid => {
+    for (let t = t0; t <= tEnd; t += 60) {
+      canvas.appendChild(h('div', { class: 'pgrid', style: `top:${y(t)}px` }));
+      canvas.appendChild(h('button', { type: 'button', class: 'paxl', style: `top:${y(t)}px`, title: 'Start your day here', onclick: () => startAt(t) }, fmtMin(t).replace(':00', '')));
+    }
+    if (cursor != null && !picked) canvas.appendChild(h('div', { class: 'pshade', style: `height:${Math.max(0, y(cursor))}px` }));
+
+    ids.forEach(sid => {
       const n = nodes[sid], on = st.picks.includes(sid), alive = liveSet.has(sid);
       const key = titleCase(n.title);
-      const frame = h('div', { class: 'pframe', role: 'button', tabindex: '0', 'aria-label': `${key}: show options` },
-        poster(n.poster, key, 'pt'), scoreBadge(n),
+      const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), 'data-k': String(sid), 'data-start': n.start, 'data-end': n.end,
+        style: `left:calc(var(--ax) + ${laneOf[sid]} * (var(--lw) + var(--lg)));top:${y(n.start)}px;height:${blockH[sid]}px` },
+        poster(n.poster, key, 'pt'),
+        h('div', { class: 'pcap' }, h('b', null, key), h('span', null, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), `${fmtMin(n.start)} – ${fmtMin(n.end)}`)),
+        scoreBadge(n),
         on ? h('div', { class: 'pmark' }, 'Picked') : null,
         h('div', { class: 'pover' },
+          badges(n, false),
           h('button', { type: 'button', class: 'ppick', 'aria-pressed': on ? 'true' : 'false', onclick: e => { if (e) e.stopPropagation(); pick(sid); } }, on ? 'Release' : 'Pick'),
           h('a', { class: 'pgo', href: '#/film/' + n.film_id, onclick: e => { if (e) e.stopPropagation(); } }, 'Film page')));
-      const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), 'data-k': String(sid) }, frame,
-        h('div', { class: 'ptime' }, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), fmtMin(n.start), h('small', null, 'ends ' + fmtMin(n.end))),
-        h('a', { class: 'pname', href: '#/film/' + n.film_id }, key), badges(n, false));
+      t.setAttribute('role', 'button');
+      t.setAttribute('tabindex', '0');
+      t.setAttribute('aria-label', `${key}, ${fmtMin(n.start)} to ${fmtMin(n.end)}: show options`);
       const toggle = () => {
         if (openTile && openTile !== t) openTile.classList.remove('open');
         t.classList.toggle('open');
         openTile = t.classList.contains('open') ? t : null;
+        focusEdges(canvas, openTile ? sid : null);
       };
-      frame.addEventListener('click', toggle);
-      frame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-      return t;
-    };
-    // the space above a row grows with the time since the row before, so order and rough distance read as time
-    const rowEls = rows.map((r, k) => h('section', { class: 'prow', style: k ? `margin-top:${Math.round(Math.max(56, Math.min(150, 40 + (r.t - rows[k - 1].t) * 0.3)))}px` : null },
-      h('button', { type: 'button', class: 'prowt', title: 'Start your day here', onclick: () => startAt(r.t) }, fmtMin(r.t)),
-      h('div', { class: 'ptiles' }, r.ids.map(tileFor))));
-    const pnow = cursor == null ? null : h('div', { class: 'pnow' }, h('span', null, (picked ? 'Free again at ' : 'Starting from ') + fmtMin(cursor)));
-    wrap.replaceChildren(...[...rowEls, pnow].filter(Boolean));
-    relayout = () => edges(wrap, live, st.picks, rows, rowEls, pnow, cursor);
+      t.addEventListener('click', toggle);
+      t.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      canvas.appendChild(t);
+    });
+    if (cursor != null) canvas.appendChild(h('div', { class: 'pnow', style: `top:${y(cursor)}px` }, h('span', null, (picked ? 'Free again at ' : 'Starting from ') + fmtMin(cursor))));
+
+    // every drawn line is a pair of consecutive films in a live lineup; the pair list is also on the canvas for checking
+    const pairs = [];
+    live.forEach(L => L.s.slice(0, -1).forEach((a, i) => { const k = a + '>' + L.s[i + 1]; if (!pairs.includes(k)) pairs.push(k); }));
+    canvas.setAttribute('data-edges', pairs.join(' '));
+    scroller.replaceChildren(canvas);
+    relayout = () => edges(canvas, pairs, st.picks);
 
     const best = live[0];
     const lines = [];
@@ -388,51 +413,47 @@ async function pathsView(dayArg) {
     h('a', { class: 'back', href: '#/plans' }, '← Plans'),
     h('h2', null, 'Every option: ' + fmtDay(day)),
     h('div', { class: 'chips' }, trip.map(d => chip(fmtDay(d), d === day, () => { location.hash = '#/paths/' + d; }, 'trip'))),
-    h('p', { class: 'note' }, 'Each film appears once, earliest at the top. Lines join films that can follow each other with time to get out, grab popcorn and walk over. A dot means those films lead to the same choices. Tap a time to start your day there, or drag the slider. Tap a poster to pick it or open it.'),
+    h('p', { class: 'note' }, 'Time runs down the page and a film is as tall as it runs, so where it ends is where its lines leave from. A line goes from a film to one that can follow it, with time to get out, grab popcorn and walk over. Tap a film for Pick and its page, and its own lines light up. Tap an hour to start your day there, or drag the slider.'),
     h('div', { class: 'pbar' }, cursorEl, slider,
       h('button', { type: 'button', class: 'chip', onclick: () => { st.picks = []; st.t = null; render(); } }, 'Reset')),
     h('div', { class: 'pleg' }, buildings.map(b => h('span', null, h('span', { class: 'bdot', style: 'background:' + bcol(b) }), b))),
-    wrap, sum, h('p', { class: 'meta' }, 'Show:'), showEl);
+    scroller, sum, h('p', { class: 'meta' }, 'Show:'), showEl,
+    data.skipped.length ? h('div', { class: 'why skipped' }, h('div', { class: 'meta' }, `${data.skipped.length} of this day's ${data.skipped.length + data.nodes.length} screenings are in no plan:`),
+      data.skipped.map(x => h('div', { class: 'meta' }, `${fmtMin(x.start)} \u2013 ${fmtMin(x.end)} `, h('a', { href: '#/film/' + x.film_id }, titleCase(x.title)), `: ${x.reason}.`))) : null);
   render();
 }
 
-// Lines between consecutive films of the live lineups (browser only: needs layout). Films in the same row that lead
-// to exactly the same next films share a dot. A line may run behind tiles in the rows between its two ends.
-function edges(wrap, live, picks, rows, rowEls, pnow, cursor) {
-  if (!wrap.getBoundingClientRect || !document.createElementNS) return;
-  const box = wrap.getBoundingClientRect();
+// Light up one film's own lines (the ones leaving it and arriving at it) and fade the rest. Browser only.
+function focusEdges(canvas, sid) {
+  if (!canvas.querySelectorAll) return;
+  canvas.querySelectorAll('.pe, .pd').forEach(el => {
+    const mine = sid != null && (el.getAttribute('data-a') === String(sid) || el.getAttribute('data-b') === String(sid));
+    el.classList.toggle('focus', mine);
+    el.classList.toggle('faint', sid != null && !mine);
+  });
+}
+
+// The lines, measured from the DOM (browser only: needs layout). Each runs from the bottom of a film to the top of a
+// later one and carries a dot at both ends, so which two films it joins is never a guess.
+function edges(canvas, pairs, picks) {
+  if (!canvas.getBoundingClientRect || !document.createElementNS) return;
+  const box = canvas.getBoundingClientRect();
   const at = {};
-  wrap.querySelectorAll('.ptile').forEach(el => { at[el.dataset.k] = el; });
+  canvas.querySelectorAll('.ptile').forEach(el => { at[el.dataset.k] = el; });
   const svg = svgEl('svg', { class: 'pedges', width: box.width, height: box.height, 'aria-hidden': 'true' });
-  const top = id => { const r = at[id].getBoundingClientRect(); return [r.left + r.width / 2 - box.left, r.top - box.top]; };
-  const bot = id => { const r = at[id].getBoundingClientRect(); return [r.left + r.width / 2 - box.left, r.bottom - box.top]; };
-  const curve = (a, b, hi) => svg.appendChild(svgEl('path', { d: `M${a[0]} ${a[1]}C${a[0]} ${(a[1] + b[1]) / 2} ${b[0]} ${(a[1] + b[1]) / 2} ${b[0]} ${b[1]}`, class: 'pe' + (hi ? ' hi' : '') }));
-  const rowOf = {};
-  rows.forEach((r, k) => r.ids.forEach(id => { rowOf[id] = k; }));
-  const succ = new Map();
-  live.forEach(L => L.s.slice(0, -1).forEach((a, i) => { if (!succ.has(a)) succ.set(a, new Set()); succ.get(a).add(L.s[i + 1]); }));
-  const groups = new Map();
-  for (const [a, set] of succ) { const key = rowOf[a] + '|' + [...set].sort((x, y) => x - y).join(); groups.set(key, (groups.get(key) || []).concat(a)); }
-  for (const [key, members] of groups) {
-    const outs = key.split('|')[1].split(',').map(Number);
-    if (members.length < 2) { members.forEach(a => outs.forEach(b => curve(bot(a), top(b), picks.includes(a) || picks.includes(b)))); continue; }
-    const src = members.map(bot), dst = outs.map(top);
-    const jx = src.reduce((s, p) => s + p[0], 0) / src.length;
-    const jy = Math.min(Math.max(...src.map(p => p[1])) + 26, Math.min(...dst.map(p => p[1])) - 12);
-    const hiIn = members.some(a => picks.includes(a));
-    members.forEach((a, k) => curve(src[k], [jx, jy], picks.includes(a)));
-    outs.forEach((b, k) => curve([jx, jy], dst[k], hiIn || picks.includes(b)));
-    svg.appendChild(svgEl('circle', { cx: jx, cy: jy, r: 5, class: 'pj' + (hiIn ? ' hi' : '') }));
-  }
-  const old = wrap.querySelector('.pedges');
+  pairs.forEach(k => {
+    const [a, b] = k.split('>');
+    const ra = at[a].getBoundingClientRect(), rb = at[b].getBoundingClientRect();
+    const x1 = ra.left + ra.width / 2 - box.left, y1 = ra.bottom - box.top, x2 = rb.left + rb.width / 2 - box.left, y2 = rb.top - box.top;
+    const m = (y1 + y2) / 2, hi = picks.includes(+a) || picks.includes(+b);
+    const attrs = { 'data-a': a, 'data-b': b };
+    svg.appendChild(svgEl('path', { ...attrs, d: `M${x1} ${y1}C${x1} ${m} ${x2} ${m} ${x2} ${y2}`, class: 'pe' + (hi ? ' hi' : '') }));
+    svg.appendChild(svgEl('circle', { ...attrs, cx: x1, cy: y1, r: 3.5, class: 'pd' + (hi ? ' hi' : '') }));
+    svg.appendChild(svgEl('circle', { ...attrs, cx: x2, cy: y2, r: 3.5, class: 'pd' + (hi ? ' hi' : '') }));
+  });
+  const old = canvas.querySelector('.pedges');
   if (old) old.remove();
-  wrap.insertBefore(svg, wrap.firstChild);
-  if (pnow) {
-    const k = rows.findIndex(r => r.t >= cursor);
-    const nextTop = k < 0 ? box.height : rowEls[k].getBoundingClientRect().top - box.top;
-    const prevBot = k > 0 ? rowEls[k - 1].getBoundingClientRect().bottom - box.top : nextTop - 40;
-    pnow.style.top = Math.round((prevBot + nextTop) / 2) + 'px';
-  }
+  canvas.appendChild(svg);
 }
 
 const filmState = { day: 'trip', q: '', genre: '', sort: 'az' };

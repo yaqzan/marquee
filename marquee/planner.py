@@ -151,7 +151,8 @@ def best_lineups(cands: list[Cand], cfg: dict, top: int = 3) -> list[dict]:
 def options(conn, cfg: dict, day: str) -> dict:
     """Every valid lineup for one day, best first, plus the sessions they use: the raw material for the
     branching view. The site works out forks and merges from this list, so picks can narrow it live."""
-    found = best_lineups(load_day(conn, cfg, day), cfg, top=10 ** 9)
+    cands = load_day(conn, cfg, day)
+    found = best_lineups(cands, cfg, top=10 ** 9)
     nodes: dict[int, dict] = {}
     for r in found:
         for c in r["lineup"]:
@@ -159,7 +160,13 @@ def options(conn, cfg: dict, day: str) -> dict:
                 "session_id": c.session_id, "film_id": c.film_id, "title": c.title, "starts_at": c.starts_at,
                 "start": c.start, "end": c.end, "building": c.building, "score": round(c.score, 1),
                 "confidence": c.confidence})
-    return {"day": day, "nodes": list(nodes.values()),
+    p = cfg["plan"]
+    late = hhmm(p["latest_end"])
+    skipped = [{"session_id": c.session_id, "film_id": c.film_id, "title": c.title, "start": c.start, "end": c.end,
+                "reason": (f"ends after {fmt(late)}, too late to be home by 1 am" if c.end > late
+                           else "no valid 3-film plan includes it (the others around it clash or leave no meal break)")}
+               for c in cands if c.session_id not in nodes]
+    return {"day": day, "nodes": list(nodes.values()), "skipped": skipped,
             "lineups": [{"s": [c.session_id for c in r["lineup"]], "score": r["score"], "cost": r["cost"],
                          "changes": r["changes"]} for r in found]}
 

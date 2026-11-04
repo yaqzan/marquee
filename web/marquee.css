@@ -133,46 +133,54 @@ a.ticket:active { background: #f3ead2; }
 .countrow .count { margin: 0; }
 .sortsel { font: 13px var(--sans); padding: 4px 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink); }
 
-/* Every option (branching view): uses the full width of a desktop browser, three posters across on a phone */
+/* Every option: a time chart. Hours run down the page, a film is a block as tall as it runs; wide screens use the width. */
 main.wide { max-width: 78rem; }
 main.wide .note, main.wide .why { max-width: 44rem; }
-.pbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; background: var(--paper); border-bottom: 1px solid var(--rule); padding: 8px 0; margin: 4px 0; }
+.pbar { position: sticky; top: 0; z-index: 8; display: flex; align-items: center; gap: 10px; background: var(--paper); border-bottom: 1px solid var(--rule); padding: 8px 0; margin: 4px 0; }
 .pcur { flex: none; font: 13px var(--sans); min-width: 8.5rem; }
 .pbar input[type=range] { flex: 1; min-width: 0; accent-color: var(--red); }
 .pleg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
 .bdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
-.pwrap { position: relative; }
-.pedges { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
-.pe { fill: none; stroke: var(--rule); stroke-width: 1.5; }
-.pe.hi { stroke: var(--gold); stroke-width: 2.5; }
-.pj { fill: var(--ink); stroke: var(--paper); stroke-width: 2; }
-.pj.hi { fill: var(--gold); }
-.prow { position: relative; z-index: 1; }
-.prowt { display: inline-block; position: relative; z-index: 2; background: var(--paper); border: 0; padding: 2px 10px 2px 0; font: 600 12px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--red); cursor: pointer; margin: 0 0 6px; }
-.prowt:hover { text-decoration: underline; }
-.pnow { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed #185FA5; z-index: 3; pointer-events: none; }
+.pscroll { overflow-x: auto; padding-bottom: 6px; }
+.pcanvas { --ax: 46px; --lw: 112px; --lg: 14px; position: relative; width: calc(var(--ax) + var(--lanes) * (var(--lw) + var(--lg))); min-width: 100%; }
+@media (min-width: 900px) { .pcanvas { --lw: 150px; --lg: 18px; --ax: 56px; } }
+.pgrid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--rule); opacity: .6; }
+.paxl { position: sticky; left: 0; z-index: 6; display: block; width: var(--ax); margin: 0; padding: 0 6px 0 0; border: 0; background: var(--paper); font: 600 11px var(--sans); color: var(--muted); text-align: right; cursor: pointer; transform: translateY(-8px); }
+.pcanvas > .paxl { position: absolute; }
+.paxl:hover { color: var(--red); text-decoration: underline; }
+.pshade { position: absolute; left: 0; right: 0; top: 0; background: rgba(243,233,210,.7); z-index: 5; pointer-events: none; }
+.pnow { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed #185FA5; z-index: 7; pointer-events: none; }
 .pnow span { position: absolute; right: 0; top: -22px; font: 600 12px var(--sans); color: #fff; background: #185FA5; padding: 2px 8px; border-radius: 999px; }
-.ptiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 170px)); justify-content: center; gap: 18px 12px; }
-.ptile { background: var(--paper); transition: opacity .15s; min-width: 0; }
+.pedges { position: absolute; left: 0; top: 0; z-index: 4; pointer-events: none; overflow: visible; }
+.pe { fill: none; stroke: #241b15; stroke-opacity: .38; stroke-width: 1.5; }
+.pe.hi { stroke: var(--gold); stroke-opacity: 1; stroke-width: 3; }
+.pd { fill: #241b15; fill-opacity: .55; stroke: #f3e9d2; stroke-width: 1; }
+.pd.hi { fill: var(--gold); fill-opacity: 1; }
+.pe.focus { stroke: #185FA5; stroke-opacity: 1; stroke-width: 3; }
+.pd.focus { fill: #185FA5; fill-opacity: 1; }
+.pe.faint, .pd.faint { opacity: .12; }
+.ptile { position: absolute; z-index: 2; width: var(--lw); border-radius: 6px; overflow: hidden; background: #e6dcc0; border: 1px solid var(--rule); cursor: pointer; transition: opacity .15s; }
 .ptile.dead { opacity: .3; }
-.pframe { position: relative; cursor: pointer; border-radius: 6px; outline-offset: 2px; }
-.poster.pt { width: 100%; height: auto; aspect-ratio: 2 / 3; border-radius: 6px; }
-.ptile.on .poster.pt { border: 2px solid var(--gold); }
+.ptile.on { border: 2px solid var(--gold); z-index: 3; }
+.ptile .poster.pt { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; object-fit: cover; object-position: top; }
+.ptile .poster.none { font-size: 38px; }
+.pcap { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 7px 5px; color: #fff; background: linear-gradient(transparent, rgba(20,14,10,.88)); line-height: 1.2; }
+.pcap b { display: block; font: 600 12px var(--sans); max-height: 2.4em; overflow: hidden; }
+.pcap span { display: block; font: 11px var(--sans); opacity: .9; margin-top: 2px; }
 .pbadge { position: absolute; top: 6px; right: 6px; min-width: 28px; text-align: center; font: 700 13px/1 var(--sans); color: #fff; padding: 5px 7px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.85); }
 .pbadge.thin { border-style: dashed; }
 .pbadge.none { background: rgba(36,27,21,.45); color: #f3e9d2; font-weight: 400; }
 .pbadge.glow { box-shadow: 0 0 0 3px color-mix(in srgb, var(--glow) 45%, transparent), 0 0 14px 6px color-mix(in srgb, var(--glow) 75%, white 10%); }
-.pmark { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font: 600 12px var(--sans); background: var(--gold); color: #fff; padding: 3px 0; border-radius: 0 0 4px 4px; }
-.pover { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: center; gap: 8px; padding: 10px; background: rgba(36,27,21,.62); border-radius: 6px; }
+.pmark { position: absolute; left: 0; right: 0; top: 0; text-align: center; font: 600 12px var(--sans); background: var(--gold); color: #fff; padding: 3px 0; }
+.pover { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: center; align-items: stretch; gap: 6px; padding: 8px; background: rgba(36,27,21,.72); }
 .ptile.open .pover { display: flex; }
-@media (hover: hover) { .pframe:hover .pover { display: flex; } }
-.ppick, .pgo { display: block; width: 100%; text-align: center; font: 600 14px var(--sans); padding: 9px 0; border-radius: 8px; border: 0; cursor: pointer; text-decoration: none; }
+@media (hover: hover) { .ptile:hover .pover { display: flex; } }
+.pover .bdgs { margin: 0; justify-content: center; gap: 4px 6px; }
+.pover .rb { color: #fff; }
+.ppick, .pgo { display: block; width: 100%; text-align: center; font: 600 13px var(--sans); padding: 6px 0; border-radius: 7px; border: 0; cursor: pointer; text-decoration: none; }
 .ppick { background: var(--paper); color: var(--ink); }
 .ptile.on .ppick { background: var(--gold); color: #fff; }
 .pgo { background: transparent; color: #f3e9d2; border: 1px solid rgba(243,233,210,.7); font-weight: 400; }
-.ptime { font: 12px var(--sans); color: var(--red); margin-top: 5px; }
-.ptime small { margin-left: 6px; font-size: 11px; color: var(--muted); }
-.pname { display: block; font: 14px/1.25 var(--serif); color: var(--ink); text-decoration: none; margin-top: 1px; }
 .gap { margin: 2px 0 2px 1px; font-size: 12px; }
 .psum { margin-top: 16px; }
 
@@ -202,4 +210,3 @@ main.wide .note, main.wide .why { max-width: 44rem; }
 .rb.big .rb-tmdb { width: 46px; height: 46px; }
 .rb.big .rb-tmdb::before { inset: 4px; }
 .rb.big .rb-tmdb b { font-size: 16px; }
-.ptile .bdgs { margin-top: 4px; }

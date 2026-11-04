@@ -22,22 +22,25 @@ Unrated films always last, earliest showtime within the chosen days; filters and
 
 ## Every option (`#/paths/<day>`, `pathsView` in marquee.js)
 
-Branching view (owner decisions, 2026-11-04): **one tile per session**, laid out as a time chart. Rows run earliest to
-latest (sessions starting within 15 minutes share a row; the space above a row grows with the time since the row before),
-each row has a tappable time label. Lines join a film to the films that can follow it in some live lineup, so a film
-that is the start of one plan and the middle of another is drawn once. Films in one row that lead to exactly the same
-next films share a dot (a merge). Starting your day at 3 pm = tap the 3:00 pm label (or drag the slider): lineups with a
-film before that time drop out, the rest stay lit, and a dashed line marks the time. Picking a film moves the cursor to
-when it ends; picks narrow the plans to those containing all of them.
-`/api/paths?day=` (trip days only) returns every valid lineup (planner rules: gaps, meals, 1 am home, no repeat)
-best first, plus the sessions in them (`planner.options`); the page works forks, merges and what is still live out
-itself. It starts from the best `[plan] options_default` lineups (30); chips widen it to `options_more` or everything.
-Tiles: big posters (2:3, up to 170 px, auto-fill grid so a desktop uses the width; `main.wide` lifts the 40rem cap on
-this route only), a score badge on each poster (hue red to green with the score; films at the `[display]
-glow_percentile` of rated films get a glow, computed server-side as `glow`; no real score shows a muted dash), tap or
-hover reveals Pick and Film page over the poster. Lines are an SVG measured from the DOM in the browser only
-(`edges()`); a line to a far row runs behind the tiles between. The stub-DOM smoke test skips lines, so check them
-by eye after layout changes. Plan list and plan pages link here.
+A true time chart (owner decisions, 2026-11-04). **Hours run down the page at 1.5 px a minute; a film is a block whose top
+is its start and whose height is its running time** (never under 104 px so the poster and buttons stay usable); films
+that overlap sit side by side in lanes. One block per session. A line leaves the bottom of a film (where it ends) and
+arrives at the top of a film that starts later, with a dot at each end, and is only drawn for consecutive films of a live
+lineup. This replaced rows grouped by start time, which put a film that starts at 3:30 between a 2:50 film and the 6:20 film
+its line really went to, so the line looked like it hit the wrong film. Never lay films out by start time alone again.
+Tapping a film lights up its own lines (blue) and fades the rest. Starting at 3 pm = tap the 3 pm label or drag the slider:
+lineups with a film before then drop out, earlier time is shaded and a dashed line marks it. Picking moves the cursor to
+when the pick ends; picks narrow the plans to those containing all of them. Merges are films with several lines arriving.
+`/api/paths?day=` (trip days only) returns every valid lineup (planner rules: gaps, meals, 1 am home, no repeat) best
+first, the sessions in them, and `skipped`: the day's sessions in no plan with the reason (listed under the chart).
+It starts from the best `[plan] options_default` lineups (30); chips widen it to `options_more` or everything.
+Tiles: poster as the block, score badge (hue red to green; films at `[display] glow_percentile` of rated films glow, the
+server's `glow` flag; no real score shows a muted dash), title and times on a scrim, tap or hover for the source badges,
+Pick and Film page. `main.wide` lifts the 40rem cap on this route only; the chart scrolls sideways on a phone.
+Lines are an SVG measured from the DOM in the browser (`edges()`), so the stub-DOM smoke test cannot draw them. It
+checks instead the data behind them: tile top and height against start and running time, no overlap in a lane, and every
+pair in the canvas `data-edges` against the walking-gap rule, for all four trip days. Check the picture by eye after
+layout changes (a paths check in a real browser: each `.pedges path` starts at tile `a`'s bottom and ends at tile `b`'s top).
 
 ## Score and why
 

@@ -222,8 +222,8 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   const live = () => tiles().filter(e => !/(^| )dead( |$)/.test(e.className));
   const pickBtn = tile => tile.find(e => e.tag === 'button' && /ppick/.test(e.className))[0];
   const click = el => (el.ls.click || []).forEach(fn => fn());
-  check('paths page: rows by start time, one poster tile per session, linking to film pages', app.find(e => /(^| )prow( |$)/.test(e.className)).length >= 5 &&
-    tiles().length > 6 && tiles().every(tl => tl.find(e => e.tag === 'a' && (e.attrs.href || '').startsWith('#/film/')).length === 2), String(tiles().length));
+  check('paths page: an hour axis and one poster tile per session, each linking to its film page', app.find(e => /(^| )paxl( |$)/.test(e.className)).length >= 5 &&
+    tiles().length > 6 && tiles().every(tl => tl.find(e => e.tag === 'a' && (e.attrs.href || '').startsWith('#/film/')).length === 1), String(tiles().length));
   check('paths API: top-percentile films carry the glow flag, and only they outrank the rest', api.nodes.some(n => n.glow) &&
     Math.min(...api.nodes.filter(n => n.glow).map(n => n.score)) >= Math.max(...api.nodes.filter(n => !n.glow).map(n => n.score)), '');
   const badges = app.find(e => /(^| )pbadge( |$)/.test(e.className));
@@ -231,7 +231,7 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
     badges.filter(b => /none/.test(b.className)).every(b => b.text().trim() === '–') && !app.text().includes('Unrated') &&
     badges.filter(b => !/none/.test(b.className)).every(b => /^\d+$/.test(b.text().trim()) && /hsl\(/.test(b.attrs.style)), badges.map(b => b.text()).join(','));
   check('paths page: glow class only on flagged films', badges.filter(b => /glow/.test(b.className)).length === tiles().filter(tl => api.nodes.find(n => n.glow && tl.attrs['data-k'] === String(n.session_id))).length, '');
-  const frame0 = tiles()[0].find(e => /(^| )pframe( |$)/.test(e.className))[0];
+  const frame0 = tiles()[0];
   (frame0.ls.click || []).forEach(fn => fn());
   check('paths page: tapping a poster reveals its Pick overlay', /(^| )open( |$)/.test(tiles()[0].className), tiles()[0].className);
   (frame0.ls.click || []).forEach(fn => fn());
@@ -240,8 +240,7 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   check('paths page: copy has no em-dash', !t.includes('—'), t.slice(0, 200));
   const plansText = /(\d+) plans? still possible/.exec(t);
   const before = +plansText[1];
-  const firstRow = app.find(e => /(^| )prow( |$)/.test(e.className))[0];
-  const firstTile = firstRow.find(e => /(^| )ptile( |$)/.test(e.className))[0];
+  const firstTile = tiles()[0];
   click(pickBtn(firstTile));
   t = app.text();
   const after = +(/(\d+) plans? still possible/.exec(t) || [0, 1])[1];
@@ -269,12 +268,11 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   const tiles = () => app.find(e => /(^| )ptile( |$)/.test(e.className));
   const keys = tiles().map(e => e.attrs['data-k']);
   check('paths: every session is drawn exactly once', keys.length === new Set(keys).size && keys.length === new Set(api.lineups.slice(0, api.default_show).flatMap(L => L.s)).size, `${keys.length} tiles, ${new Set(keys).size} unique`);
-  const titles = tiles().map(e => e.find(a => /(^| )pname( |$)/.test(a.className))[0].text());
   const byId = Object.fromEntries(api.nodes.map(n => [String(n.session_id), n]));
   const starts = keys.map(k => byId[k].start);
   check('paths: tiles run earliest to latest', starts.every((s, i) => i === 0 || starts[i - 1] <= s), starts.join(','));
-  const labels = app.find(e => e.tag === 'button' && /(^| )prowt( |$)/.test(e.className));
-  check('paths: a time label per row, in order', labels.length >= 5, String(labels.length));
+  const labels = app.find(e => e.tag === 'button' && /(^| )paxl( |$)/.test(e.className));
+  check('paths: an hour label down the axis, in order', labels.length >= 5, String(labels.length));
   const before = +(/(\d+) plans? still possible/.exec(app.text()) || [0, 0])[1];
   const mid = labels[Math.floor(labels.length / 2)];
   (mid.ls.click || []).forEach(fn => fn());
@@ -282,4 +280,31 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   check('paths: tapping a time starts the day there and drops earlier starts', mt < before && /Starting from/.test(app.text()), `${before} -> ${mt}`);
   const dead = tiles().filter(e => /(^| )dead( |$)/.test(e.className)).length;
   check('paths: tiles that cannot be part of a plan from there are dimmed', dead > 0, String(dead));
+}
+
+// ---- every option: the picture must say what the data says (a film is as tall as it runs, a line joins two films that fit)
+for (const day of ['2026-10-31', '2026-11-01', '2026-11-07', '2026-11-08']) {
+  const api = await (await fetch('/api/paths?day=' + day)).json();
+  await go('#/paths/' + day);
+  const reset = app.find(e => e.tag === 'button' && e.text().trim() === 'Reset')[0];
+  (reset.ls.click || []).forEach(fn => fn());  // the page keeps its time filter while the tab is open
+  const tiles = app.find(e => /(^| )ptile( |$)/.test(e.className));
+  const canvas = app.find(e => /(^| )pcanvas( |$)/.test(e.className))[0];
+  const byId = Object.fromEntries(api.nodes.map(n => [String(n.session_id), n]));
+  const css = (tile, k) => +(new RegExp(k + ':(-?[\\d.]+)px').exec(tile.attrs.style) || [])[1];
+  const first = tiles[0];
+  const t0 = byId[first.attrs['data-k']].start - css(first, 'top') / 1.5;
+  check(`${day}: tile top is its start time and tile height is its running time`, tiles.every(tl => {
+    const n = byId[tl.attrs['data-k']];
+    return Math.abs(css(tl, 'top') - (n.start - t0) * 1.5) <= 1 && css(tl, 'height') >= Math.round((n.end - n.start) * 1.5) - 1;
+  }), '');
+  const lanes = {};
+  tiles.forEach(tl => { const lane = /\+ (\d+) \*/.exec(tl.attrs.style)[1]; (lanes[lane] = lanes[lane] || []).push(tl); });
+  check(`${day}: no two tiles overlap in a lane`, Object.values(lanes).every(list => list.map(tl => [css(tl, 'top'), css(tl, 'top') + css(tl, 'height')]).sort((a, b) => a[0] - b[0]).every((r, i, a) => i === 0 || a[i - 1][1] <= r[0])), '');
+  const pairs = (canvas.attrs['data-edges'] || '').split(' ').filter(Boolean).map(x => x.split('>'));
+  const need = (a, b) => a.building === b.building ? api.buffers.same : api.buffers.same + (api.buffers.walk[[a.building, b.building].sort().join(' | ')] ?? (api.buffers.fallback - api.buffers.same));
+  const bad = pairs.filter(([a, b]) => !(byId[b].start >= byId[a].end + need(byId[a], byId[b]) && byId[a].film_id !== byId[b].film_id));
+  check(`${day}: all ${pairs.length} lines join a film to one that really fits after it`, pairs.length > 0 && bad.length === 0, bad.slice(0, 3).map(([a, b]) => `${byId[a].title} ${byId[a].end} -> ${byId[b].title} ${byId[b].start}`).join(' | '));
+  const pageText = app.text();
+  check(`${day}: sessions in no plan are listed with a reason`, api.skipped.length === 0 || (pageText.includes('are in no plan') && api.skipped.every(x => pageText.includes(x.reason.slice(0, 20)))), '');
 }
