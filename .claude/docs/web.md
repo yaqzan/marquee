@@ -60,11 +60,15 @@ so a tags-only 55 is never presented as a verdict; a film with no critic scores,
   URL changes; a 403/429 stops the run. Without Pillow the 125 px standard variant is stored instead. A missing
   poster renders a lettered paper placeholder, never a broken image. Shown on film cards, the film page and
   plan timelines.
-- **Badges**: Rotten Tomatoes style, original icons in `web/icons/` (tomato-fresh, tomato-rotten, popcorn-full,
-  popcorn-spilled; not RT's artwork). Critics = the RT percent from OMDb. **Audience = IMDb (100+ votes), else
-  TMDB (20+), and the label says which**: RT's own audience score (Popcornmeter) has no open source (OMDb returns
-  N/A; scraping RT is off the table), so never present this as RT's. Fresh = at or above `[display] fresh_at`
-  (60); the server sets the `fresh` flag, the UI only picks the icon. 54 films have RT, 50 an audience score.
+- **Badges** (owner decision, 2026-11-04: one per source, each in that source's own style, side by side like Rotten
+  Tomatoes' critics and audience pair): Rotten Tomatoes critics (tomato, fresh at `[display] fresh_at`), Metacritic (square
+  metascore tile in its green / yellow / red bands), IMDb (yellow tag with a star), TMDB (percent ring in TMDB's
+  green / yellow / red). Original shapes and icons in `web/icons/`, not the companies' logos. the film APIs carry `ratings`
+  per film: `{source, name, kind, value, score, votes, band}` in a fixed order; the server sets the good / mixed / bad `band`
+  (`serve._band`, thresholds under `[display]`) and drops IMDb under 100 votes and TMDB under 20. The UI never picks a colour
+  from a number. **RT's own audience score (Popcornmeter) has no open source** (OMDb returns N/A; scraping RT is off the
+  table), so the audience badges are IMDb and TMDB and say so; never present them as RT's. Shown compact (icon and number)
+  on film cards, plan timelines and every-option tiles, big with a source label on the film page.
 - Footer credits OMDb and TMDB (TMDB's attribution terms) and says the posters are the festival's own.
 
 ## Rules

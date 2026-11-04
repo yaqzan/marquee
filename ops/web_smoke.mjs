@@ -106,14 +106,34 @@ check('plan timeline: score and reasons under each film', (t.match(/Score \d+/g)
 await go('#/films');
 const posterImgs = app.find(e => e.tag === 'img' && /(^| )poster( |$)/.test(e.className));
 check('films list: poster thumbnails served from /poster/', posterImgs.length > 10 && posterImgs.every(i => i.attrs.src.startsWith('/poster/')), String(posterImgs.length));
-const withBoth = allFilms.find(f => f.rt && f.audience);
+const rtOf = f => f.ratings.find(r => r.source === 'rt');
+const withBoth = allFilms.find(f => rtOf(f) && f.ratings.length >= 3) || allFilms.find(f => rtOf(f));
+check('API: ratings come one per source, in a fixed order, with a band', allFilms.every(f => f.ratings.every(r => ['good', 'mixed', 'bad'].includes(r.band)) &&
+  f.ratings.map(r => ['rt', 'metacritic', 'imdb', 'tmdb'].indexOf(r.source)).every((x, i, a) => x >= 0 && (i === 0 || a[i - 1] < x))), '');
+check('API: IMDb and TMDB only appear with enough votes', allFilms.every(f => f.ratings.every(r => r.source === 'imdb' ? r.votes >= 100 : r.source === 'tmdb' ? r.votes >= 20 : true)), '');
 t = await go('#/film/' + withBoth.id);
-const icons = app.find(e => e.tag === 'img' && /^\/icons\//.test(e.attrs.src || '')).map(i => i.attrs.src);
-check('film page: tomato and popcorn badges with the right icons', icons.length === 2 &&
-  icons[0].includes(withBoth.rt.fresh ? 'tomato-fresh' : 'tomato-rotten') &&
-  icons[1].includes(withBoth.audience.fresh ? 'popcorn-full' : 'popcorn-spilled'), icons.join(' '));
-check('film page: labels say where the audience score is from', /Audience \((IMDb|TMDB)\)/.test(t) && t.includes('Critics'), t.slice(0, 400));
-const rotten = allFilms.find(f => f.rt && !f.rt.fresh);
+const bdg = () => app.find(e => /(^| )rb( |$)/.test(e.className));
+check('film page: one badge per source, side by side', bdg().length === withBoth.ratings.length && bdg().length >= 1, bdg().map(e => e.className).join('|'));
+check('film page: Rotten Tomatoes badge uses the tomato for its band', app.find(e => e.tag === 'img' && /tomato-/.test(e.attrs.src || '')).every(i => i.attrs.src.includes(rtOf(withBoth).band === 'good' ? 'tomato-fresh' : 'tomato-rotten')), '');
+check('film page: badges are labelled with their source', withBoth.ratings.every(r => t.includes(r.name)), t.slice(0, 500));
+const other = allFilms.find(f => f.ratings.some(r => r.source === 'metacritic'));
+if (other) {
+  t = await go('#/film/' + other.id);
+  const mc = other.ratings.find(r => r.source === 'metacritic');
+  check('film page: Metacritic is a coloured tile with the metascore', app.find(e => /(^| )rb-mc( |$)/.test(e.className)).some(e => e.className.includes(mc.band) && e.text().trim() === mc.value), JSON.stringify(mc));
+}
+const tm = allFilms.find(f => f.ratings.some(r => r.source === 'tmdb'));
+if (tm) {
+  t = await go('#/film/' + tm.id);
+  const r = tm.ratings.find(x => x.source === 'tmdb');
+  check('film page: TMDB is a ring carrying its score', app.find(e => /(^| )rb-tmdb( |$)/.test(e.className)).some(e => e.attrs.style === `--p:${r.score}` && e.className.includes(r.band)), JSON.stringify(r));
+}
+const im = allFilms.find(f => f.ratings.some(r => r.source === 'imdb'));
+if (im) {
+  t = await go('#/film/' + im.id);
+  check('film page: IMDb is a yellow tag with the star icon', app.find(e => /(^| )rb-imdb( |$)/.test(e.className)).length >= 1 && app.find(e => e.tag === 'img' && /imdb-star/.test(e.attrs.src || '')).length >= 1, '');
+}
+const rotten = allFilms.find(f => rtOf(f) && rtOf(f).band === 'bad');
 if (rotten) {
   await go('#/film/' + rotten.id);
   check('film page: a sub-60 critics score gets the rotten icon', app.find(e => e.tag === 'img' && (e.attrs.src || '').includes('tomato-rotten')).length === 1, '');

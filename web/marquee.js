@@ -123,19 +123,28 @@ function whyCard(w) {
     parts);
 }
 
-// Rotten Tomatoes style badges: tomato for critics, popcorn for audiences. The server says fresh or not.
-// (RT's own audience score has no open source, so the audience badge is IMDb, else TMDB, and says which.)
+// One badge per source, each in that source's own style: Rotten Tomatoes critics (tomato), Metacritic (coloured
+// metascore tile), IMDb (yellow tag with a star), TMDB (percent ring). The server picks the good/mixed/bad band.
+// (RT's own audience score has no open source, so the audience badges are IMDb and TMDB, and say so.)
+function ratingBadge(r, big) {
+  const title = `${r.name} ${r.kind.toLowerCase()} ${r.value}` + (r.votes ? ` (${fmtInt(r.votes)} votes)` : '');
+  const px = big ? 30 : 18;
+  let mark;
+  if (r.source === 'rt') {
+    mark = [h('img', { src: `/icons/tomato-${r.band === 'good' ? 'fresh' : 'rotten'}.svg?v=1`, alt: '', width: px, height: px }), h('span', { class: 'rb-n' }, r.value)];
+  } else if (r.source === 'metacritic') {
+    mark = h('span', { class: 'rb-mc ' + r.band }, r.value);
+  } else if (r.source === 'imdb') {
+    mark = h('span', { class: 'rb-imdb' }, h('img', { src: '/icons/imdb-star.svg?v=1', alt: '', width: big ? 16 : 12, height: big ? 16 : 12 }), h('b', null, r.value));
+  } else {
+    mark = h('span', { class: 'rb-tmdb ' + r.band, style: `--p:${r.score}` }, h('b', null, String(r.score)));
+  }
+  return h('span', { class: 'rb rb-' + r.source + (big ? ' big' : ''), title }, mark, big ? h('span', { class: 'rb-l' }, `${r.name} ${r.kind.toLowerCase()}`) : null);
+}
+
 function badges(o, big) {
-  const size = big ? 30 : 18;
-  const one = (kind, fresh, value, label, title) => h('span', { class: 'bdg', title },
-    h('img', { src: `/icons/${kind}-${fresh ? (kind === 'tomato' ? 'fresh' : 'full') : (kind === 'tomato' ? 'rotten' : 'spilled')}.svg?v=1`,
-      alt: '', width: size, height: size }),
-    h('span', { class: 'bdg-n' }, value + '%'),
-    big ? h('span', { class: 'bdg-l' }, label) : null);
-  const bits = [];
-  if (o.rt) bits.push(one('tomato', o.rt.fresh, o.rt.score, 'Critics', 'Rotten Tomatoes critics ' + o.rt.score + '%'));
-  if (o.audience) bits.push(one('popcorn', o.audience.fresh, o.audience.score, 'Audience (' + o.audience.source + ')', 'Audience score from ' + o.audience.source));
-  return bits.length ? h('div', { class: 'bdgs' + (big ? ' big' : '') }, bits) : null;
+  const list = (o.ratings || []).map(r => ratingBadge(r, big));
+  return list.length ? h('div', { class: 'bdgs' + (big ? ' big' : '') }, list) : null;
 }
 
 function poster(src, title, cls) {
@@ -335,7 +344,7 @@ async function pathsView(dayArg) {
           h('a', { class: 'pgo', href: '#/film/' + n.film_id, onclick: e => { if (e) e.stopPropagation(); } }, 'Film page')));
       const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), 'data-k': String(sid) }, frame,
         h('div', { class: 'ptime' }, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), fmtMin(n.start), h('small', null, 'ends ' + fmtMin(n.end))),
-        h('a', { class: 'pname', href: '#/film/' + n.film_id }, key));
+        h('a', { class: 'pname', href: '#/film/' + n.film_id }, key), badges(n, false));
       const toggle = () => {
         if (openTile && openTile !== t) openTile.classList.remove('open');
         t.classList.toggle('open');

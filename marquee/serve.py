@@ -51,22 +51,37 @@ def health() -> dict:
     return out
 
 
+RATING_ORDER = ("rt", "metacritic", "imdb", "tmdb")
+RATING_KIND = {"rt": "Critics", "metacritic": "Critics", "imdb": "Audience", "tmdb": "Audience"}
+
+
+def _band(source: str, score: float, d: dict) -> str:
+    """good / mixed / bad, each source on its own scale: RT fresh or rotten, Metacritic's green / yellow / red
+    metascore bands, and one shared cut-off pair for the audience scores."""
+    if source == "rt":
+        return "good" if score >= d["fresh_at"] else "bad"
+    if source == "metacritic":
+        return "good" if score >= d["metacritic_green_at"] else "mixed" if score >= d["metacritic_yellow_at"] else "bad"
+    return "good" if score >= d["good_at"] else "mixed" if score >= d["mixed_at"] else "bad"
+
+
 def media(c, cfg: dict, film_ids: list[str] | None = None) -> dict[str, dict]:
-    """Per film: the Rotten Tomatoes critics score, an audience score (IMDb, else TMDB), each with its fresh flag,
-    and the poster URL."""
+    """Per film: one rating per source (Rotten Tomatoes critics, Metacritic, IMDb, TMDB; IMDb and TMDB only with
+    enough votes to mean something), each with its display value and good/mixed/bad band, plus the poster URL."""
     d = cfg["display"]
+    min_votes = {"imdb": d["audience_imdb_min_votes"], "tmdb": d["audience_tmdb_min_votes"]}
     out: dict[str, dict] = {}
     for r in c.execute("SELECT film_id, source, score, votes FROM film_rating"):
-        m = out.setdefault(r["film_id"], {"rt": None, "audience": None, "poster": None})
-        fresh = round(r["score"]) >= d["fresh_at"]
-        if r["source"] == "rt":
-            m["rt"] = {"score": round(r["score"]), "fresh": fresh}
-        elif r["source"] == "imdb" and (r["votes"] or 0) >= d["audience_imdb_min_votes"]:
-            m["audience"] = {"score": round(r["score"]), "source": "IMDb", "votes": r["votes"], "fresh": fresh}
-        elif r["source"] == "tmdb" and (r["votes"] or 0) >= d["audience_tmdb_min_votes"] and not (m["audience"] and m["audience"]["source"] == "IMDb"):
-            m["audience"] = {"score": round(r["score"]), "source": "TMDB", "votes": r["votes"], "fresh": fresh}
+        src = r["source"]
+        if src not in RATING_ORDER or (r["votes"] or 0) < min_votes.get(src, 0):
+            continue
+        m = out.setdefault(r["film_id"], {"ratings": [], "poster": None})
+        m["ratings"].append({"source": src, "name": SOURCE_NAMES[src], "kind": RATING_KIND[src], "value": _value(src, r["score"]),
+                             "score": round(r["score"]), "votes": r["votes"], "band": _band(src, r["score"], d)})
+    for m in out.values():
+        m["ratings"].sort(key=lambda x: RATING_ORDER.index(x["source"]))
     for r in c.execute("SELECT film_id, sha8 FROM film_poster"):
-        out.setdefault(r["film_id"], {"rt": None, "audience": None, "poster": None})["poster"] = f"/poster/{r['film_id']}?v={r['sha8']}"
+        out.setdefault(r["film_id"], {"ratings": [], "poster": None})["poster"] = f"/poster/{r['film_id']}?v={r['sha8']}"
     return out
 
 
@@ -145,7 +160,7 @@ def films(c, q: dict) -> dict:
     for r in rows:
         r["why"] = score_view(c, cfg, r["id"], labels)
         m = md.get(r["id"], {})
-        r["rt"], r["audience"], r["poster"] = m.get("rt"), m.get("audience"), m.get("poster")
+        r["ratings"], r["poster"] = m.get("ratings", []), m.get("poster")
         r["score"] = sc[r["id"]]["score"] if r["id"] in sc else None
         r["confidence"] = sc[r["id"]]["confidence"] if r["id"] in sc else None
         r["tags"] = tags.get(r["id"], [])
@@ -169,7 +184,7 @@ def film(c, fid: str) -> dict | None:
     cfg = load_config()
     out["why"] = score_view(c, cfg, fid)
     m = media(c, cfg).get(fid, {})
-    out["rt"], out["audience"], out["poster"] = m.get("rt"), m.get("audience"), m.get("poster")
+    out["ratings"], out["poster"] = m.get("ratings", []), m.get("poster")
     out["sessions"] = _rows(c, "SELECT s.id AS session_id, s.starts_at, s.status, v.name AS venue, v.building "
                                "FROM session s JOIN venue v ON v.screen_id=s.screen_id "
                                "WHERE s.film_id=? AND s.removed_at IS NULL ORDER BY s.starts_at", (fid,))
@@ -198,7 +213,7 @@ def plans(c, day: str | None) -> dict:
         for it in p["items"]:
             it["why"] = score_view(c, cfg, it["film_id"], labels)
             m = md.get(it["film_id"], {})
-            it["rt"], it["audience"], it["poster"] = m.get("rt"), m.get("audience"), m.get("poster")
+            it["ratings"], it["poster"] = m.get("ratings", []), m.get("poster")
     return {"plans": out}
 
 
@@ -231,7 +246,7 @@ def paths(c, day: str) -> dict | None:
         n["glow"] = glow is not None and n["why"] is not None and n["why"]["score"] >= glow and not (
             n["why"]["confidence"] < 0.15 and not n["why"]["tags"] and not n["why"]["taste"]["nudge"])
         m = md.get(n["film_id"], {})
-        n["poster"] = m.get("poster")
+        n["poster"], n["ratings"] = m.get("poster"), m.get("ratings", [])
     out["buffers"] = {"same": cfg["plan"]["buffer_same_building_min"], "walk": cfg["plan"].get("walk_min", {}),
                       "fallback": cfg["plan"]["buffer_between_buildings_min"]}
     out["default_show"], out["more_show"] = cfg["plan"]["options_default"], cfg["plan"]["options_more"]
