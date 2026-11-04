@@ -57,6 +57,11 @@ premium_tag_code = "0000000115"
 "Capitol Theatre | Chrysler Theatre" = 4
 "Armouries | Chrysler Theatre" = 7
 
+[plan.walk_m]                   # the same pairs in metres (OSM foot routing), shown on the every-option view
+"Armouries | Capitol Theatre" = 232
+"Capitol Theatre | Chrysler Theatre" = 277
+"Armouries | Chrysler Theatre" = 474
+
 [score]
 # score = (sum of source scores weighted + prior_weight * prior) / (sum of weights + prior_weight), 0-100.
 # Thin or missing critic data therefore shrinks toward the pedigree prior, and `confidence` is the share of

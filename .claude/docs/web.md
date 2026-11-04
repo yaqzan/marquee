@@ -22,25 +22,32 @@ Unrated films always last, earliest showtime within the chosen days; filters and
 
 ## Every option (`#/paths/<day>`, `pathsView` in marquee.js)
 
-A true time chart (owner decisions, 2026-11-04). **Hours run down the page at 1.5 px a minute; a film is a block whose top
-is its start and whose height is its running time** (never under 104 px so the poster and buttons stay usable); films
-that overlap sit side by side in lanes. One block per session. A line leaves the bottom of a film (where it ends) and
-arrives at the top of a film that starts later, with a dot at each end, and is only drawn for consecutive films of a live
-lineup. This replaced rows grouped by start time, which put a film that starts at 3:30 between a 2:50 film and the 6:20 film
-its line really went to, so the line looked like it hit the wrong film. Never lay films out by start time alone again.
-**No wires by default** (owner, 2026-11-04: the full set looked like tangled wire). Tapping a film shows only its own lines (blue; dashed from what can come before, solid to what can follow) and lights the films at the other ends while the rest step back; an All lines chip brings every connection back, faint. A picked film keeps its lines in gold. Starting at 3 pm = tap the 3 pm label or drag the slider:
-lineups with a film before then drop out, earlier time is shaded and a dashed line marks it. Picking moves the cursor to
-when the pick ends; picks narrow the plans to those containing all of them. Merges are films with several lines arriving.
-`/api/paths?day=` (trip days only) returns every valid lineup (planner rules: gaps, meals, no repeat; no late cut-off, the tile and plan card say when you would be home) best
-first, the sessions in them, and `skipped`: the day's sessions in no plan with the reason (`drive_min` lets the page show the time home) (listed under the chart).
+A map of the day (owner decisions, 2026-11-04). **Across: one column group per building**, ordered by walking distance
+(`orderBuildings`: the two furthest apart at the ends, so the middle building really is between), and **the space between
+two groups is as wide as the walk** and labelled "4 min walk, 232 m" (`[plan.walk_min]` / `[plan.walk_m]`, OSM foot routing).
+Films showing at once in one building take side-by-side lanes inside its tinted band. **Down: a real time axis** at 1.5 px a
+minute; a film is a block whose top is its start and whose height is its running time (never under 104 px). One block per
+session. Tap an hour label or drag the slider to start your day there (earlier time is shaded, a dashed line marks it).
+**Hover or tap a film = what picking it would mean**: the plans you could still make with it (on top of current picks,
+unless they clash) light up with their routes, and every film you could no longer see goes grey (`.unrel`, grayscale).
+Tap pins it and opens Pick / Film page / source badges over the poster. Picking moves the cursor to when the pick ends.
+Routes: rounded elbow lines from where a film ends to where a later one starts, an arrow at the end, a paper halo so they
+read over posters, dashed for the part before the focused film, and a pill on the lines touching it saying the break and
+the walk ("142 min, 4 min walk"). **No lines until you hover or tap** (all of them at once looked like tangled wire); the
+All lines chip draws every live connection faint. A picked film keeps its lines in gold. Never lay films out by start time
+alone: rows grouped by start time once put a film between a line and its real target and the line looked like it hit the wrong film.
+`/api/paths?day=` (trip days only) returns every valid lineup (planner rules: gaps, meals, no repeat; no late cut-off,
+tiles and the plan card say when you would be home via `drive_min`) best first, the sessions in them, `skipped`
+(sessions in no plan, with the reason, listed under the chart) and `buffers` (gap rule, walk minutes and metres).
 It starts from the best `[plan] options_default` lineups (30); chips widen it to `options_more` or everything.
 Tiles: poster as the block, score badge (hue red to green; films at `[display] glow_percentile` of rated films glow, the
-server's `glow` flag; no real score shows a muted dash), title and times on a scrim, tap or hover for the source badges,
-Pick and Film page. `main.wide` lifts the 40rem cap on this route only; the chart scrolls sideways on a phone.
-Lines are an SVG measured from the DOM in the browser (`edges()`), so the stub-DOM smoke test cannot draw them. It
-checks instead the data behind them: tile top and height against start and running time, no overlap in a lane, and every
-pair in the canvas `data-edges` against the walking-gap rule, for all four trip days. Check the picture by eye after
-layout changes (a paths check in a real browser: each `.pedges path` starts at tile `a`'s bottom and ends at tile `b`'s top).
+server's `glow` flag; no real score shows a muted dash), title and times on a scrim. `main.wide` lifts the 40rem cap on this
+route only; the chart scrolls sideways on a phone.
+Lines are an SVG measured from the DOM in the browser (`edges()`), so the stub-DOM smoke test cannot draw them. It checks
+the data behind them instead: tile top and height against start and running time, no overlap in a lane, every pair in the
+canvas `data-edges` against the walking-gap rule for all four trip days, building order and walk labels, and that hovering
+a film greys exactly the films outside its plans. Check the picture by eye after layout changes (in a real browser: each
+`.pedges .pw` starts at tile `a`'s bottom and ends at tile `b`'s top, and each tile's centre is inside its building's `.pband`).
 
 ## Score and why
 

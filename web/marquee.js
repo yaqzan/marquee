@@ -266,8 +266,8 @@ const pathState = {};
 const BCOL = ['#7a2f22', '#a8741a', '#3d5a6c', '#5a6b3a'];
 let relayout = null;
 let openTile = null;
-let focusSid = null;
 const PX_MIN = 1.5;      // pixels per minute on the every-option time axis
+const HEAD = 62;         // height of the building headers above the time axis
 const MIN_BLOCK = 104;   // a film is never drawn shorter than this, so its poster and buttons stay usable
 
 // Score badge on a poster: colour runs red to green with the score; the top percentile (server's `glow` flag) glows;
@@ -289,13 +289,27 @@ function svgEl(tag, attrs) {
   return e;
 }
 
+// Buildings left to right by walking distance: the two furthest apart at the ends, the rest in order from the left end,
+// so a building in the middle really is between the others.
+function orderBuildings(bs, walk) {
+  const d = (a, b) => walk[[a, b].sort().join(' | ')] ?? 99;
+  if (bs.length < 3) return bs.slice();
+  let ends = [bs[0], bs[1]];
+  bs.forEach(a => bs.forEach(b => { if (a < b && d(a, b) > d(ends[0], ends[1])) ends = [a, b]; }));
+  const mid = bs.filter(x => !ends.includes(x)).sort((x, y) => d(ends[0], x) - d(ends[0], y));
+  return [ends[0], ...mid, ends[1]];
+}
+
 async function pathsView(dayArg) {
   const fest = await api('/api/festival');
   const trip = fest.days.filter(d => d.candidate).map(d => d.day);
   const day = trip.includes(dayArg) ? dayArg : trip[0];
   const data = await api('/api/paths?day=' + day);
   const nodes = Object.fromEntries(data.nodes.map(n => [n.session_id, n]));
-  const buildings = [...new Set(data.nodes.map(n => n.building))].sort();
+  const walk = data.buffers.walk, walkM = data.buffers.walk_m || {};
+  const pairKey = (a, b) => [a, b].sort().join(' | ');
+  const walkMin = (a, b) => (a === b ? 0 : walk[pairKey(a, b)] ?? (data.buffers.fallback - data.buffers.same));
+  const buildings = orderBuildings([...new Set(data.nodes.map(n => n.building))].sort(), walk);
   const bcol = b => BCOL[buildings.indexOf(b) % BCOL.length];
   const st = pathState[day] || (pathState[day] = { picks: [], t: null, show: data.default_show, all: false });
   const starts = data.nodes.map(n => n.start);
@@ -309,6 +323,7 @@ async function pathsView(dayArg) {
 
   const baseOf = () => data.lineups.slice(0, st.show);
   const has = (L, p) => p.every(x => L.s.includes(x));
+  const afterStart = L => st.t == null || L.s.every(s => nodes[s].start >= st.t);
 
   function pick(sid) {
     let p = st.picks.includes(sid) ? st.picks.filter(x => x !== sid) : st.picks.concat(sid);
@@ -319,50 +334,97 @@ async function pathsView(dayArg) {
   }
   function startAt(t) { st.t = t; st.picks = []; render(); }
 
+  // The plans you could still make if you picked this film (on top of what is already picked, unless that clashes).
+  function consequence(sid) {
+    let p = st.picks.includes(sid) ? st.picks : st.picks.concat(sid);
+    let Ls = baseOf().filter(L => has(L, p) && (p.length > 1 || afterStart(L)));
+    if (!Ls.length) Ls = baseOf().filter(L => has(L, [sid]));
+    return Ls;
+  }
+
   function render() {
     openTile = null;
-    focusSid = null;
+    let pinSid = null, hoverSid = null;
     allBtn.classList.toggle('on', st.all);
     const base = baseOf();
     const picked = st.picks.length > 0;
-    const live = base.filter(L => has(L, st.picks) && (picked || st.t == null || L.s.every(s => nodes[s].start >= st.t)));
+    const live = base.filter(L => has(L, st.picks) && (picked || afterStart(L)));
     const liveSet = new Set(live.flatMap(L => L.s));
     const cursor = picked ? Math.max(...st.picks.map(s => nodes[s].end)) : st.t;
     cursorEl.textContent = cursor == null ? 'Any start time' : (picked ? 'Free again at ' : 'Starting from ') + fmtMin(cursor);
     slider.value = cursor == null ? tMin : Math.min(tMax, Math.max(tMin, cursor));
 
-    // A real time axis: a film is a block whose top is its start and whose height is its running time, so what you
-    // see ending is what a line leaves from, and a line can only run downward to a film that starts later.
+    // Across: one column group per building, nearest buildings next to each other and the space between them as wide
+    // as the walk. Down: a real time axis, a film is a block as tall as it runs, so a line leaves where a film ends.
     const ids = [...new Set(base.flatMap(L => L.s))].sort((a, b) => nodes[a].start - nodes[b].start || nodes[a].end - nodes[b].end || a - b);
     const t0 = Math.floor(Math.min(...ids.map(i => nodes[i].start), 1440) / 60) * 60;
     const tEnd = Math.ceil(Math.max(...ids.map(i => nodes[i].end), 0) / 60) * 60;
-    const lanes = [];  // end of the last block in each lane; side by side films take the next lane
-    const laneOf = {}, blockH = {};
-    ids.forEach(id => {
-      const n = nodes[id];
-      blockH[id] = Math.max(MIN_BLOCK, Math.round((n.end - n.start) * PX_MIN));
-      const lastEnd = n.start * PX_MIN + blockH[id];
-      let k = lanes.findIndex(e => e <= n.start * PX_MIN);
-      if (k < 0) { k = lanes.length; lanes.push(0); }
-      lanes[k] = lastEnd;
-      laneOf[id] = k;
+    const y = t => HEAD + Math.round((t - t0) * PX_MIN);
+    const laneOf = {}, blockH = {}, col = {};
+    let laneBase = 0, gapPx = 0;
+    buildings.forEach((b, gi) => {
+      if (gi) gapPx += Math.round(30 + walkMin(buildings[gi - 1], b) * 14);
+      const ends = [];  // end of the last block in each lane; films showing at once in one building take the next lane
+      ids.filter(i => nodes[i].building === b).forEach(id => {
+        const n = nodes[id];
+        blockH[id] = Math.max(MIN_BLOCK, Math.round((n.end - n.start) * PX_MIN));
+        let k = ends.findIndex(e => e <= n.start * PX_MIN);
+        if (k < 0) { k = ends.length; ends.push(0); }
+        ends[k] = n.start * PX_MIN + blockH[id];
+        laneOf[id] = k;
+      });
+      col[b] = { laneBase, lanes: Math.max(1, ends.length), gapPx };
+      laneBase += col[b].lanes;
     });
-    const y = t => Math.round((t - t0) * PX_MIN);
-    const canvas = h('div', { class: 'pcanvas' + (st.all ? ' all' : ''), style: `--lanes:${lanes.length};height:${y(tEnd) + 24}px` });
+    const canvas = h('div', { class: 'pcanvas' + (st.all ? ' all' : ''), style: `--lanes:${laneBase};--gaps:${gapPx}px;height:${y(tEnd) + 24}px` });
+    const unit = '(var(--lw) + var(--lg))';
 
+    buildings.forEach((b, gi) => {
+      const c = col[b];
+      canvas.appendChild(h('div', { class: 'pband', style: `--bc:${bcol(b)};left:calc(var(--ax) + ${c.laneBase} * ${unit} + ${c.gapPx}px - var(--lg) / 2);width:calc(${c.lanes} * ${unit})` },
+        h('div', { class: 'pbandh' }, b)));
+      if (gi) {
+        const pv = col[buildings[gi - 1]], m = walkMin(buildings[gi - 1], b), mm = walkM[pairKey(buildings[gi - 1], b)];
+        canvas.appendChild(h('div', { class: 'pwalk', style: `left:calc(var(--ax) + ${pv.laneBase + pv.lanes} * ${unit} + ${pv.gapPx}px - var(--lg) / 2);width:${c.gapPx - pv.gapPx}px` },
+          h('span', null, `${m} min walk`), mm ? h('small', null, `${mm} m`) : null));
+      }
+    });
     for (let t = t0; t <= tEnd; t += 60) {
       canvas.appendChild(h('div', { class: 'pgrid', style: `top:${y(t)}px` }));
       canvas.appendChild(h('button', { type: 'button', class: 'paxl', style: `top:${y(t)}px`, title: 'Start your day here', onclick: () => startAt(t) }, fmtMin(t).replace(':00', '')));
     }
-    if (cursor != null && !picked) canvas.appendChild(h('div', { class: 'pshade', style: `height:${Math.max(0, y(cursor))}px` }));
+    if (cursor != null && !picked) canvas.appendChild(h('div', { class: 'pshade', style: `top:${HEAD}px;height:${Math.max(0, y(cursor) - HEAD)}px` }));
+
+    const tileEls = {};
+    // Hover (or tap) a film: the plans you could still make light up with their routes, every film you could no longer
+    // see go grey.
+    const applyFocus = () => {
+      const sid = hoverSid ?? pinSid;
+      canvas.classList.toggle('focused', sid != null);
+      let lit = null, pairSet = null;
+      if (sid != null) {
+        const Ls = consequence(sid);
+        lit = new Set(Ls.flatMap(L => L.s));
+        pairSet = new Set(Ls.flatMap(L => L.s.slice(0, -1).map((a, i) => a + '>' + L.s[i + 1])));
+      }
+      for (const [k, el] of Object.entries(tileEls)) el.classList.toggle('unrel', lit != null && !lit.has(+k));
+      if (!canvas.querySelectorAll) return;
+      canvas.querySelectorAll('.pw').forEach(g => {
+        const a = +g.getAttribute('data-a'), b = +g.getAttribute('data-b');
+        const mine = pairSet != null && pairSet.has(a + '>' + b);
+        g.classList.toggle('focus', mine);
+        g.classList.toggle('pre', mine && nodes[b].start <= nodes[sid].start);
+        g.classList.toggle('adj', mine && (a === sid || b === sid));
+      });
+    };
 
     ids.forEach(sid => {
       const n = nodes[sid], on = st.picks.includes(sid), alive = liveSet.has(sid);
-      const key = titleCase(n.title);
-      const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), 'data-k': String(sid), 'data-start': n.start, 'data-end': n.end,
-        style: `left:calc(var(--ax) + ${laneOf[sid]} * (var(--lw) + var(--lg)));top:${y(n.start)}px;height:${blockH[sid]}px` },
+      const key = titleCase(n.title), c = col[n.building];
+      const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), 'data-k': String(sid), 'data-start': n.start, 'data-end': n.end, 'data-building': n.building,
+        style: `left:calc(var(--ax) + ${c.laneBase + laneOf[sid]} * ${unit} + ${c.gapPx}px);top:${y(n.start)}px;height:${blockH[sid]}px` },
         poster(n.poster, key, 'pt'),
-        h('div', { class: 'pcap' }, h('b', null, key), h('span', null, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), `${fmtMin(n.start)} – ${fmtMin(n.end)}`)),
+        h('div', { class: 'pcap' }, h('b', null, key), h('span', null, `${fmtMin(n.start)} – ${fmtMin(n.end)}`)),
         scoreBadge(n),
         on ? h('div', { class: 'pmark' }, 'Picked') : null,
         h('div', { class: 'pover' },
@@ -372,25 +434,28 @@ async function pathsView(dayArg) {
           h('a', { class: 'pgo', href: '#/film/' + n.film_id, onclick: e => { if (e) e.stopPropagation(); } }, 'Film page')));
       t.setAttribute('role', 'button');
       t.setAttribute('tabindex', '0');
-      t.setAttribute('aria-label', `${key}, ${fmtMin(n.start)} to ${fmtMin(n.end)}: show options`);
+      t.setAttribute('aria-label', `${key}, ${n.building}, ${fmtMin(n.start)} to ${fmtMin(n.end)}: show options`);
       const toggle = () => {
-        if (openTile && openTile !== t) openTile.classList.remove('open');
-        t.classList.toggle('open');
-        openTile = t.classList.contains('open') ? t : null;
-        focusEdges(canvas, openTile ? sid : null);
+        if (openTile) openTile.classList.remove('open');
+        if (pinSid === sid) { pinSid = null; openTile = null; } else { pinSid = sid; t.classList.add('open'); openTile = t; }
+        applyFocus();
       };
       t.addEventListener('click', toggle);
       t.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      t.addEventListener('mouseenter', () => { hoverSid = sid; applyFocus(); });
+      t.addEventListener('mouseleave', () => { hoverSid = null; applyFocus(); });
+      tileEls[sid] = t;
       canvas.appendChild(t);
     });
     if (cursor != null) canvas.appendChild(h('div', { class: 'pnow', style: `top:${y(cursor)}px` }, h('span', null, (picked ? 'Free again at ' : 'Starting from ') + fmtMin(cursor))));
 
-    // every drawn line is a pair of consecutive films in a live lineup; the pair list is also on the canvas for checking
-    const pairs = [];
-    live.forEach(L => L.s.slice(0, -1).forEach((a, i) => { const k = a + '>' + L.s[i + 1]; if (!pairs.includes(k)) pairs.push(k); }));
+    // every line is a pair of consecutive films in some plan; only the live ones count for "All lines"
+    const pairs = [], livePairs = new Set();
+    base.forEach(L => L.s.slice(0, -1).forEach((a, i) => { const k = a + '>' + L.s[i + 1]; if (!pairs.includes(k)) pairs.push(k); }));
+    live.forEach(L => L.s.slice(0, -1).forEach((a, i) => livePairs.add(a + '>' + L.s[i + 1])));
     canvas.setAttribute('data-edges', pairs.join(' '));
     scroller.replaceChildren(canvas);
-    relayout = () => edges(canvas, pairs, st.picks);
+    relayout = () => { edges(canvas, pairs, livePairs, st.picks, nodes, walkMin); applyFocus(); };
 
     const best = live[0];
     const lines = [];
@@ -399,7 +464,7 @@ async function pathsView(dayArg) {
       const full = st.picks.length >= 3;
       lines.push(h('p', { class: 'note' }, full ? 'Your plan' : `${live.length} ${live.length === 1 ? 'plan' : 'plans'} still possible. Best from here:`));
       lines.push(h('div', { class: 'why' },
-        best.s.map((sid, k) => [k ? h('div', { class: 'meta gap' }, `${nodes[sid].start - nodes[best.s[k - 1]].end} min between${nodes[sid].building !== nodes[best.s[k - 1]].building ? ', and a walk' : ''}`) : null,
+        best.s.map((sid, k) => [k ? h('div', { class: 'meta gap' }, `${nodes[sid].start - nodes[best.s[k - 1]].end} min between${nodes[sid].building !== nodes[best.s[k - 1]].building ? `, including a ${walkMin(nodes[sid].building, nodes[best.s[k - 1]].building)} min walk` : ''}`) : null,
           h('div', null, `${fmtMin(nodes[sid].start)} – ${fmtMin(nodes[sid].end)}  `, h('a', { href: '#/film/' + nodes[sid].film_id }, titleCase(nodes[sid].title)), ` · ${nodes[sid].building}`)]),
         h('div', { class: 'meta' }, `Score ${best.score.toFixed(1)} · ${money(best.cost)} · ${best.changes ? best.changes + ' building change' + (best.changes > 1 ? 's' : '') : 'all in one building'} · home about ${fmtMin(nodes[best.s[best.s.length - 1]].end + data.drive_min)}`)));
     }
@@ -418,56 +483,64 @@ async function pathsView(dayArg) {
     h('a', { class: 'back', href: '#/plans' }, '← Plans'),
     h('h2', null, 'Every option: ' + fmtDay(day)),
     h('div', { class: 'chips' }, trip.map(d => chip(fmtDay(d), d === day, () => { location.hash = '#/paths/' + d; }, 'trip'))),
-    h('p', { class: 'note' }, 'Time runs down the page and a film is as tall as it runs, so where it ends is where its lines leave from. A line goes from a film to one that can follow it, with time to get out, grab popcorn and walk over. Tap a film for Pick and its page: the films that can come before and after it light up and only its own lines show. Turn on All lines to see every connection at once. Tap an hour to start your day there, or drag the slider.'),
+    h('p', { class: 'note' }, 'One column per building, the closest ones side by side, and the gap between them as wide as the walk. Time runs down the page and a film is as tall as it runs. Hover or tap a film: the plans you could still make light up with their routes, and every film you could no longer see goes grey. Tap an hour to start your day there, or drag the slider.'),
     h('div', { class: 'pbar' }, cursorEl, slider, allBtn,
       h('button', { type: 'button', class: 'chip', onclick: () => { st.picks = []; st.t = null; render(); } }, 'Reset')),
-    h('div', { class: 'pleg' }, buildings.map(b => h('span', null, h('span', { class: 'bdot', style: 'background:' + bcol(b) }), b))),
     scroller, sum, h('p', { class: 'meta' }, 'Show:'), showEl,
     data.skipped.length ? h('div', { class: 'why skipped' }, h('div', { class: 'meta' }, `${data.skipped.length} of this day's ${data.skipped.length + data.nodes.length} screenings are in no plan:`),
-      data.skipped.map(x => h('div', { class: 'meta' }, `${fmtMin(x.start)} \u2013 ${fmtMin(x.end)} `, h('a', { href: '#/film/' + x.film_id }, titleCase(x.title)), `: ${x.reason}.`))) : null);
+      data.skipped.map(x => h('div', { class: 'meta' }, `${fmtMin(x.start)} – ${fmtMin(x.end)} `, h('a', { href: '#/film/' + x.film_id }, titleCase(x.title)), `: ${x.reason}.`))) : null);
   render();
 }
 
-// One film in focus: its own lines show (solid to what can follow it, dashed from what can come before it), the films
-// on the other end of them stay lit and everything else steps back. Browser only.
-function focusEdges(canvas, sid) {
-  if (!canvas.querySelectorAll) return;
-  focusSid = sid;
-  const key = sid == null ? null : String(sid);
-  const rel = new Set(key == null ? [] : [key]);
-  canvas.querySelectorAll('.pe, .pd').forEach(el => {
-    const a = el.getAttribute('data-a'), b = el.getAttribute('data-b');
-    const mine = key != null && (a === key || b === key);
-    if (mine) { rel.add(a); rel.add(b); }
-    el.classList.toggle('focus', mine);
-    el.classList.toggle('pre', mine && b === key);
-  });
-  canvas.classList.toggle('focused', key != null);
-  canvas.querySelectorAll('.ptile').forEach(t => t.classList.toggle('unrel', key != null && !rel.has(t.dataset.k)));
-}
-
-// The lines, measured from the DOM (browser only: needs layout). Each runs from the bottom of a film to the top of a
-// later one and carries a dot at both ends, so which two films it joins is never a guess.
-function edges(canvas, pairs, picks) {
+// The routes, measured from the DOM (browser only: needs layout). Each is an elbow with rounded corners from the bottom of
+// a film down to the top of a later one, ending in an arrow, with a halo so it reads over a poster. The pill says the
+// break (and the walk if the building changes). Which lines show is decided by applyFocus and the All lines chip.
+function edges(canvas, pairs, livePairs, picks, nodes, walkMin) {
   if (!canvas.getBoundingClientRect || !document.createElementNS) return;
   const box = canvas.getBoundingClientRect();
   const at = {};
   canvas.querySelectorAll('.ptile').forEach(el => { at[el.dataset.k] = el; });
   const svg = svgEl('svg', { class: 'pedges', width: box.width, height: box.height, 'aria-hidden': 'true' });
+  const defs = svgEl('defs');
+  const mk = svgEl('marker', { id: 'parr', viewBox: '0 0 10 10', refX: 7, refY: 5, markerWidth: 5, markerHeight: 5, orient: 'auto' });
+  mk.appendChild(svgEl('path', { d: 'M1 1L9 5L1 9z', fill: 'context-stroke' }));
+  defs.appendChild(mk);
+  svg.appendChild(defs);
+  const route = (x1, y1, x2, y2) => {
+    if (Math.abs(x1 - x2) < 1) return { d: `M${x1} ${y1}V${y2}`, lx: x1, ly: (y1 + y2) / 2 };
+    const ym = y1 + Math.max(20, Math.min(46, (y2 - y1) / 2)), dir = x2 > x1 ? 1 : -1;
+    const r = Math.max(0, Math.min(10, Math.abs(x2 - x1) / 2, ym - y1 - 2, y2 - ym - 2));
+    return { d: `M${x1} ${y1}V${ym - r}Q${x1} ${ym} ${x1 + dir * r} ${ym}H${x2 - dir * r}Q${x2} ${ym} ${x2} ${ym + r}V${y2}`, lx: (x1 + x2) / 2, ly: ym };
+  };
+  const labels = [];
   pairs.forEach(k => {
     const [a, b] = k.split('>');
     const ra = at[a].getBoundingClientRect(), rb = at[b].getBoundingClientRect();
     const x1 = ra.left + ra.width / 2 - box.left, y1 = ra.bottom - box.top, x2 = rb.left + rb.width / 2 - box.left, y2 = rb.top - box.top;
-    const m = (y1 + y2) / 2, hi = picks.includes(+a) || picks.includes(+b);
-    const attrs = { 'data-a': a, 'data-b': b };
-    svg.appendChild(svgEl('path', { ...attrs, d: `M${x1} ${y1}C${x1} ${m} ${x2} ${m} ${x2} ${y2}`, class: 'pe' + (hi ? ' hi' : '') }));
-    svg.appendChild(svgEl('circle', { ...attrs, cx: x1, cy: y1, r: 3.5, class: 'pd' + (hi ? ' hi' : '') }));
-    svg.appendChild(svgEl('circle', { ...attrs, cx: x2, cy: y2, r: 3.5, class: 'pd' + (hi ? ' hi' : '') }));
+    const live = livePairs.has(k), hi = live && (picks.includes(+a) || picks.includes(+b));
+    const { d, lx, ly } = route(x1, y1, x2, y2);
+    const na = nodes[a], nb = nodes[b], gap = nb.start - na.end, wk = walkMin(na.building, nb.building);
+    const g = svgEl('g', { class: 'pw' + (live ? ' live' : '') + (hi ? ' hi' : ''), 'data-a': a, 'data-b': b });
+    g.appendChild(svgEl('path', { d, class: 'pwh' }));
+    g.appendChild(svgEl('path', { d, class: 'pe', 'marker-end': 'url(#parr)' }));
+    g.appendChild(svgEl('circle', { cx: x1, cy: y1, r: 4, class: 'pd' }));
+    const lab = svgEl('g', { class: 'pl', transform: `translate(${lx} ${ly})` });
+    const rect = svgEl('rect', { rx: 9, ry: 9 });
+    const txt = svgEl('text', { 'text-anchor': 'middle', dy: '0.35em' });
+    txt.textContent = `${gap} min` + (wk ? ` · ${wk} min walk` : '');
+    lab.appendChild(rect);
+    lab.appendChild(txt);
+    g.appendChild(lab);
+    svg.appendChild(g);
+    labels.push([rect, txt]);
   });
   const old = canvas.querySelector('.pedges');
   if (old) old.remove();
   canvas.appendChild(svg);
-  focusEdges(canvas, focusSid);  // a redraw (resize, late layout) keeps the film in focus
+  labels.forEach(([rect, txt]) => {
+    const bb = txt.getBBox();
+    rect.setAttribute('x', bb.x - 7); rect.setAttribute('y', bb.y - 3); rect.setAttribute('width', bb.width + 14); rect.setAttribute('height', bb.height + 6);
+  });
 }
 
 const filmState = { day: 'trip', q: '', genre: '', sort: 'az' };

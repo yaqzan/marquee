@@ -133,38 +133,55 @@ a.ticket:active { background: #f3ead2; }
 .countrow .count { margin: 0; }
 .sortsel { font: 13px var(--sans); padding: 4px 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink); }
 
-/* Every option: a time chart. Hours run down the page, a film is a block as tall as it runs; wide screens use the width. */
+/* Every option: a time chart. Columns are buildings (nearest side by side, the gap as wide as the walk), hours run down
+   the page, a film is a block as tall as it runs; wide screens use the width. */
 main.wide { max-width: 78rem; }
 main.wide .note, main.wide .why { max-width: 44rem; }
 .pbar { position: sticky; top: 0; z-index: 8; display: flex; align-items: center; gap: 10px; background: var(--paper); border-bottom: 1px solid var(--rule); padding: 8px 0; margin: 4px 0; }
 .pcur { flex: none; font: 13px var(--sans); min-width: 8.5rem; }
 .pbar input[type=range] { flex: 1; min-width: 0; accent-color: var(--red); }
-.pleg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
-.bdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
 .pscroll { overflow-x: auto; padding-bottom: 6px; }
-.pcanvas { --ax: 46px; --lw: 112px; --lg: 14px; position: relative; width: calc(var(--ax) + var(--lanes) * (var(--lw) + var(--lg))); min-width: 100%; }
+.pcanvas { --ax: 46px; --lw: 112px; --lg: 14px; position: relative; width: calc(var(--ax) + var(--lanes) * (var(--lw) + var(--lg)) + var(--gaps)); min-width: 100%; }
 @media (min-width: 900px) { .pcanvas { --lw: 150px; --lg: 18px; --ax: 56px; } }
+.pband { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--bc) 9%, transparent); border: 1px solid color-mix(in srgb, var(--bc) 30%, transparent); border-radius: 10px; }
+.pbandh { padding: 10px 6px 0; text-align: center; font: 600 13px var(--serif); color: var(--bc); }
+.pwalk { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; padding-top: 8px; font: 600 11px var(--sans); color: var(--muted); text-align: center; }
+.pwalk::before { content: ""; position: absolute; left: 50%; top: 52px; bottom: 0; border-left: 2px dotted var(--rule); }
+.pwalk span, .pwalk small { position: relative; background: var(--paper); padding: 0 3px; }
+.pwalk small { font-weight: 400; }
 .pgrid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--rule); opacity: .6; }
 .paxl { position: sticky; left: 0; z-index: 6; display: block; width: var(--ax); margin: 0; padding: 0 6px 0 0; border: 0; background: var(--paper); font: 600 11px var(--sans); color: var(--muted); text-align: right; cursor: pointer; transform: translateY(-8px); }
 .pcanvas > .paxl { position: absolute; }
 .paxl:hover { color: var(--red); text-decoration: underline; }
-.pshade { position: absolute; left: 0; right: 0; top: 0; background: rgba(243,233,210,.7); z-index: 5; pointer-events: none; }
+.pshade { position: absolute; left: 0; right: 0; background: rgba(243,233,210,.7); z-index: 5; pointer-events: none; }
 .pnow { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed #185FA5; z-index: 7; pointer-events: none; }
 .pnow span { position: absolute; right: 0; top: -22px; font: 600 12px var(--sans); color: #fff; background: #185FA5; padding: 2px 8px; border-radius: 999px; }
+
+/* Routes: elbow lines with rounded corners and an arrow, a paper halo so they read over posters, a pill for the break. */
 .pedges { position: absolute; left: 0; top: 0; z-index: 4; pointer-events: none; overflow: visible; }
-.pe { fill: none; stroke: #241b15; stroke-width: 1.5; opacity: 0; transition: opacity .15s; }
-.pd { fill: #241b15; stroke: #f3e9d2; stroke-width: 1; opacity: 0; transition: opacity .15s; }
-.pcanvas.all .pe { opacity: .3; }
-.pcanvas.all .pd { opacity: .45; }
-.pcanvas.all.focused .pe, .pcanvas.all.focused .pd { opacity: .08; }
-.pe.hi { stroke: var(--gold); stroke-width: 3; opacity: 1; }
-.pd.hi { fill: var(--gold); opacity: 1; }
-.pcanvas .pe.focus { stroke: #185FA5; stroke-width: 3; opacity: 1; }
-.pcanvas .pd.focus { fill: #185FA5; opacity: 1; }
-.pe.pre { stroke-dasharray: 6 5; }
-.ptile.unrel { opacity: .35; }
-.ptile { position: absolute; z-index: 2; width: var(--lw); border-radius: 6px; overflow: hidden; background: #e6dcc0; border: 1px solid var(--rule); cursor: pointer; transition: opacity .15s; }
+.pw { opacity: 0; transition: opacity .15s; }
+.pwh { fill: none; stroke: #f3e9d2; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: .9; }
+.pe { fill: none; stroke: #241b15; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.pd { fill: #241b15; stroke: #f3e9d2; stroke-width: 1.5; }
+.pl { opacity: 0; }
+.pl rect { fill: #fbf6ea; stroke: #185FA5; stroke-width: 1; }
+.pl text { font: 600 11px var(--sans); fill: #185FA5; }
+.pcanvas.all .pw.live { opacity: .4; }
+.pcanvas.all .pwh { stroke-width: 4; }
+.pcanvas.all .pe { stroke-width: 1.5; }
+.pw.hi { opacity: 1; }
+.pw.hi .pe { stroke: var(--gold); stroke-width: 3; }
+.pw.hi .pd { fill: var(--gold); }
+.pcanvas.focused .pw { opacity: 0; }
+.pcanvas.focused .pw.focus { opacity: 1; }
+.pcanvas.focused .pw.focus .pe { stroke: #185FA5; stroke-width: 3; }
+.pcanvas.focused .pw.focus .pd { fill: #185FA5; }
+.pw.pre .pe { stroke-dasharray: 8 6; }
+.pw.adj .pl { opacity: 1; }
+
+.ptile { position: absolute; z-index: 2; width: var(--lw); border-radius: 6px; overflow: hidden; background: #e6dcc0; border: 1px solid var(--rule); cursor: pointer; transition: opacity .15s, filter .15s; }
 .ptile.dead { opacity: .3; }
+.ptile.unrel { opacity: .4; filter: grayscale(1); }
 .ptile.on { border: 2px solid var(--gold); z-index: 3; }
 .ptile .poster.pt { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; object-fit: cover; object-position: top; }
 .ptile .poster.none { font-size: 38px; }
@@ -178,7 +195,6 @@ main.wide .note, main.wide .why { max-width: 44rem; }
 .pmark { position: absolute; left: 0; right: 0; top: 0; text-align: center; font: 600 12px var(--sans); background: var(--gold); color: #fff; padding: 3px 0; }
 .pover { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: center; align-items: stretch; gap: 6px; padding: 8px; background: rgba(36,27,21,.72); }
 .ptile.open .pover { display: flex; }
-@media (hover: hover) { .ptile:hover .pover { display: flex; } }
 .phome { font: 11px var(--sans); color: #f3e9d2; text-align: center; }
 .pover .bdgs { margin: 0; justify-content: center; gap: 4px 6px; }
 .pover .rb { color: #fff; }

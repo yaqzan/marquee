@@ -299,7 +299,7 @@ for (const day of ['2026-10-31', '2026-11-01', '2026-11-07', '2026-11-08']) {
     return Math.abs(css(tl, 'top') - (n.start - t0) * 1.5) <= 1 && css(tl, 'height') >= Math.round((n.end - n.start) * 1.5) - 1;
   }), '');
   const lanes = {};
-  tiles.forEach(tl => { const lane = /\+ (\d+) \*/.exec(tl.attrs.style)[1]; (lanes[lane] = lanes[lane] || []).push(tl); });
+  tiles.forEach(tl => { const lane = /left:(calc\([^;]*\));/.exec(tl.attrs.style)[1]; (lanes[lane] = lanes[lane] || []).push(tl); });
   check(`${day}: no two tiles overlap in a lane`, Object.values(lanes).every(list => list.map(tl => [css(tl, 'top'), css(tl, 'top') + css(tl, 'height')]).sort((a, b) => a[0] - b[0]).every((r, i, a) => i === 0 || a[i - 1][1] <= r[0])), '');
   const pairs = (canvas.attrs['data-edges'] || '').split(' ').filter(Boolean).map(x => x.split('>'));
   const need = (a, b) => a.building === b.building ? api.buffers.same : api.buffers.same + (api.buffers.walk[[a.building, b.building].sort().join(' | ')] ?? (api.buffers.fallback - api.buffers.same));
@@ -307,4 +307,37 @@ for (const day of ['2026-10-31', '2026-11-01', '2026-11-07', '2026-11-08']) {
   check(`${day}: all ${pairs.length} lines join a film to one that really fits after it`, pairs.length > 0 && bad.length === 0, bad.slice(0, 3).map(([a, b]) => `${byId[a].title} ${byId[a].end} -> ${byId[b].title} ${byId[b].start}`).join(' | '));
   const pageText = app.text();
   check(`${day}: sessions in no plan are listed with a reason`, api.skipped.length === 0 || (pageText.includes('are in no plan') && api.skipped.every(x => pageText.includes(x.reason.slice(0, 20)))), '');
+}
+
+// ---- every option: columns are buildings (nearest together), and a hovered film greys out what you could no longer make
+for (const day of ['2026-11-07', '2026-11-08']) {
+  const api = await (await fetch('/api/paths?day=' + day)).json();
+  await go('#/paths/' + day);
+  const reset = app.find(e => e.tag === 'button' && e.text().trim() === 'Reset')[0];
+  (reset.ls.click || []).forEach(fn => fn());
+  const tiles = () => app.find(e => /(^| )ptile( |$)/.test(e.className));
+  const heads = app.find(e => /(^| )pbandh( |$)/.test(e.className)).map(e => e.text().trim());
+  const buildings = [...new Set(api.nodes.map(n => n.building))];
+  const d = (a, b) => a === b ? 0 : api.buffers.walk[[a, b].sort().join(' | ')];
+  check(`${day}: one column group per building, in order of walking distance (middle one is nearest to both)`, heads.length === buildings.length &&
+    new Set(heads).size === heads.length && (heads.length < 3 || d(heads[0], heads[1]) + d(heads[1], heads[2]) <= d(heads[0], heads[2]) + 2 * Math.min(d(heads[0], heads[1]), d(heads[1], heads[2]))) &&
+    (heads.length < 3 || d(heads[0], heads[2]) === Math.max(...buildings.flatMap(a => buildings.map(b => d(a, b))))), heads.join(' | '));
+  const walks = app.find(e => /(^| )pwalk( |$)/.test(e.className)).map(e => e.text());
+  check(`${day}: the space between buildings says the walk in minutes and metres`, walks.length === heads.length - 1 && walks.every(t => /\d+ min walk/.test(t) && /\d+ m/.test(t)), walks.join(' | '));
+  check(`${day}: every film sits in its own building's column`, tiles().every(tl => {
+    const col = heads.indexOf(tl.attrs['data-building']);
+    return col >= 0;
+  }), '');
+  const sidOf = tl => +tl.attrs['data-k'];
+  const first = api.lineups.slice(0, api.default_show);
+  const target = tiles()[Math.floor(tiles().length / 2)];
+  (target.ls.mouseenter || []).forEach(fn => fn());
+  const expect = new Set(first.filter(L => L.s.includes(sidOf(target))).flatMap(L => L.s));
+  const lit = tiles().filter(tl => !/(^| )unrel( |$)/.test(tl.className)).map(sidOf);
+  check(`${day}: hovering a film lights exactly the films that share a plan with it, the rest go grey`, lit.length === expect.size && lit.every(x => expect.has(x)) && expect.size < tiles().length, `${lit.length} lit, ${expect.size} expected of ${tiles().length}`);
+  (target.ls.mouseleave || []).forEach(fn => fn());
+  check(`${day}: leaving the film clears the grey`, tiles().every(tl => !/(^| )unrel( |$)/.test(tl.className)), '');
+  (target.ls.click || []).forEach(fn => fn());
+  check(`${day}: tapping pins it (overlay open, others stay grey after the pointer leaves)`, /(^| )open( |$)/.test(target.className) && tiles().some(tl => /(^| )unrel( |$)/.test(tl.className)), '');
+  (target.ls.click || []).forEach(fn => fn());
 }
