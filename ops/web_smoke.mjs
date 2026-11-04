@@ -358,3 +358,13 @@ for (const day of ['2026-11-07', '2026-11-08']) {
   check(`${day}: tapping pins it (overlay open, others stay grey after the pointer leaves)`, /(^| )open( |$)/.test(target.className) && tiles().some(tl => /(^| )unrel( |$)/.test(tl.className)), '');
   (target.ls.click || []).forEach(fn => fn());
 }
+
+// ---- the full-width layout belongs to the timeline routes only (it was lost once when #/plans became the timeline)
+{
+  const wide = async hash => { await go(hash); return /(^| )wide( |$)/.test(app.className); };
+  const planId = (await (await fetch('/api/plans')).json()).plans[0].id;
+  check('Plans tab (#/plans) uses the wide column', await wide('#/plans'), app.className);
+  check('#/paths/<day> uses the wide column', await wide('#/paths/2026-11-08'), app.className);
+  check('films, a film, the schedule and a day plan keep the narrow column',
+    !(await wide('#/films')) && !(await wide('#/schedule')) && !(await wide('#/plan/' + planId)), app.className);
+}

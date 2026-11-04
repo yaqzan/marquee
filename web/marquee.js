@@ -646,7 +646,7 @@ const routes = [
 
 async function route() {
   const hash = location.hash || '#/plans';
-  app.classList.toggle('wide', /^#\/paths/.test(hash));
+  app.classList.toggle('wide', /^#\/(paths(\/|$)|plans$)/.test(hash));  // the timeline routes use the full width
   for (const [re, fn, tab] of routes) {
     const m = hash.match(re);
     if (!m) continue;
