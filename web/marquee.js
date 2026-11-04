@@ -317,7 +317,7 @@ async function pathsView(dayArg) {
           const t = h('div', { class: 'ptile' + (on ? ' on' : '') + (alive ? '' : ' dead'), title: reasonLine(n.why), 'data-k': i + ':' + sid },
             h('a', { class: 'pposter', href: '#/film/' + n.film_id, 'aria-label': 'Open ' + titleCase(n.title) }, poster(n.poster, titleCase(n.title), 'pt')),
             h('button', { type: 'button', class: 'ppick', 'aria-pressed': on ? 'true' : 'false', onclick: () => pick(i, sid) }, on ? 'Picked' : 'Pick'),
-            h('div', { class: 'ptime' }, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), fmtMin(n.start)),
+            h('div', { class: 'ptime' }, h('span', { class: 'bdot', style: 'background:' + bcol(n.building) }), fmtMin(n.start), h('small', null, 'ends ' + fmtMin(n.end))),
             h('div', { class: 'pname' }, titleCase(n.title)),
             sc.chip);
           return t;
@@ -333,7 +333,8 @@ async function pathsView(dayArg) {
       const full = st.picks.every(Boolean);
       lines.push(h('p', { class: 'note' }, full ? 'Your plan' : `${live.length} ${live.length === 1 ? 'plan' : 'plans'} still possible. Best from here:`));
       lines.push(h('div', { class: 'why' },
-        best.s.map(sid => h('div', null, `${fmtMin(nodes[sid].start)} – ${fmtMin(nodes[sid].end)}  `, h('a', { href: '#/film/' + nodes[sid].film_id }, titleCase(nodes[sid].title)), ` · ${nodes[sid].building}`)),
+        best.s.map((sid, k) => [k ? h('div', { class: 'meta gap' }, `${nodes[sid].start - nodes[best.s[k - 1]].end} min between${nodes[sid].building !== nodes[best.s[k - 1]].building ? ', and a walk' : ''}`) : null,
+          h('div', null, `${fmtMin(nodes[sid].start)} – ${fmtMin(nodes[sid].end)}  `, h('a', { href: '#/film/' + nodes[sid].film_id }, titleCase(nodes[sid].title)), ` · ${nodes[sid].building}`)]),
         h('div', { class: 'meta' }, `Score ${best.score.toFixed(1)} · ${money(best.cost)} · ${best.changes ? best.changes + ' building change' + (best.changes > 1 ? 's' : '') : 'all in one building'}`)));
     }
     sum.replaceChildren(...lines);
@@ -351,7 +352,7 @@ async function pathsView(dayArg) {
     h('a', { class: 'back', href: '#/plans' }, '← Plans'),
     h('h2', null, 'Every option: ' + fmtDay(day)),
     h('div', { class: 'chips' }, trip.map(d => chip(fmtDay(d), d === day, () => { location.hash = '#/paths/' + d; }, 'trip'))),
-    h('p', { class: 'note' }, 'Each row is a film slot. Lines join films that can follow each other. Where lines meet in a dot, those films lead to the same choices. Tap a poster for the film, Pick to lock it in.'),
+    h('p', { class: 'note' }, 'Each row is a film slot. Lines join films that can follow each other with time to get out, grab popcorn and walk over. Where lines meet in a dot, those films lead to the same choices. Tap a poster for the film, Pick to lock it in.'),
     h('div', { class: 'pbar' }, cursorEl, slider,
       h('button', { type: 'button', class: 'chip', onclick: () => { st.picks = [null, null, null]; st.t = null; render(); } }, 'Reset')),
     h('div', { class: 'pleg' }, buildings.map(b => h('span', null, h('span', { class: 'bdot', style: 'background:' + bcol(b) }), b))),

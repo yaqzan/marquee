@@ -165,6 +165,8 @@ a.ticket:active { background: #f3ead2; }
 .ppick { width: 100%; margin: 4px 0 0; font: 12px var(--sans); padding: 3px 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--card); color: var(--ink); cursor: pointer; }
 .ptile.on .ppick { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .ptime { font: 11px var(--sans); color: var(--red); margin-top: 4px; }
+.ptime small { display: block; font-size: 10px; color: var(--muted); }
+.gap { margin: 2px 0 2px 1px; font-size: 12px; }
 .pname { font: 11px/1.25 var(--sans); max-height: 2.5em; overflow: hidden; }
 .ptile .scorechip { display: inline-block; font-size: 11px; padding: 0 6px; margin-top: 2px; }
 .psum { margin-top: 16px; }

@@ -34,8 +34,8 @@ latest_end = "22:45"            # + drive_hours = home by 1 am
 drive_hours = 2.0               # each way
 home_label = "home"            # how plan text names where you drive from (set it in config.local.toml)
 arrival_buffer_min = 30         # parked and in the lobby before the first film
-buffer_same_building_min = 5    # changing screens inside one building
-buffer_between_buildings_min = 15
+buffer_same_building_min = 20   # out, restroom, popcorn, find the next seat, inside one building
+buffer_between_buildings_min = 30  # the same plus the walk or a move of the car
 meal_min_gap_min = 60           # a free block this long must fall inside each meal window
 lunch_window = ["11:30", "14:30"]
 dinner_window = ["16:30", "20:00"]

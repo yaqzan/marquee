@@ -189,10 +189,10 @@ check('plan timeline: posters beside each film', app.find(e => e.tag === 'img' &
   check('paths API: lineups best first, each with three distinct sessions', api.lineups.length > 50 &&
     api.lineups.every((L, i) => L.s.length === 3 && new Set(L.s).size === 3 && (i === 0 || api.lineups[i - 1].score >= L.score)), String(api.lineups.length));
   const byId = Object.fromEntries(api.nodes.map(n => [n.session_id, n]));
-  check('paths API: every lineup respects the 5/15 min walking buffer and film order', api.lineups.every(L => L.s.every((s, i) => {
+  check('paths API: every lineup respects the configured walking buffers and film order', api.lineups.every(L => L.s.every((s, i) => {
     if (!i) return true;
     const a = byId[L.s[i - 1]], b = byId[s];
-    return b.start >= a.end + (a.building === b.building ? 5 : 15);
+    return b.start >= a.end + (a.building === b.building ? api.buffers.same : api.buffers.between);
   })), '');
   check('paths API: a non-trip day is refused', (await fetch('/api/paths?day=2026-11-04')).status === 404, '');
   check('paths API: bad day is a 400', (await fetch('/api/paths?day=x')).status === 400, '');
