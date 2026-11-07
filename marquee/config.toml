@@ -108,6 +108,23 @@ half_votes = 100
 "Armouries - Sheehan Hall" = "Armouries"
 "Chrysler St. Clair Centre" = "Chrysler Theatre"
 
+# Where each building is, for the "Open in Google Maps" links. Addresses are WIFF's own (windsorfilmfestival.com/our-venues).
+# lat/lon are the points Google Maps itself resolves for each venue by name + address (checked 2026-11-06; within 25 m of the
+# OSM points, and straight-line distances between the three agree with the OSM walking distances in [plan.walk_m]). The link pins these coordinates, not the address text: a geocoder
+# put "121 University Ave W" in Sandwich, 10 km away. Re-check if a venue moves.
+[buildings."Capitol Theatre"]
+address = "121 University Ave W, Windsor, ON N9A 5P4"
+lat = 42.316944
+lon = -83.040000
+[buildings."Chrysler Theatre"]
+address = "201 Riverside Dr W, Windsor, ON N9A 5K4"
+lat = 42.318903
+lon = -83.041903
+[buildings."Armouries"]
+address = "37 University Ave E, Windsor, ON N9A 5N8"
+lat = 42.317333
+lon = -83.037933
+
 [enrich]
 sleep_s = 0.3                   # between API calls
 omdb_daily_budget = 900         # the free key allows 1000 a day; a walk cut short resumes tomorrow

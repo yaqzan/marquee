@@ -53,6 +53,15 @@ canvas `data-edges` against the walking-gap rule for all four trip days, buildin
 a film greys exactly the films outside its plans. Check the picture by eye after layout changes (in a real browser: each
 `.pedges .pw` starts at tile `a`'s bottom and ends at tile `b`'s top, and each tile's centre is inside its building's `.pband`).
 
+## Map links (owner, 2026-11-06)
+
+Under each theatre in a day plan (`#/plan/<id>` and the best-plan summary on `#/paths/<day>`): "Open in Google Maps" plus
+the address. The server builds `https://www.google.com/maps/search/?api=1&query=<lat>,<lon>` from `[buildings.*]` in
+config.toml (`building_info` in serve.py; `buildings` rides on `/api/plans` and `/api/paths`). It pins coordinates, never
+address text: Nominatim put "121 University Ave W" in Sandwich, 10 km off. The coordinates are the ones Google resolves
+for each venue's name + address. A building with no entry shows no link. Adding a venue to `[venues]` means adding its
+`[buildings.*]` entry and re-checking the pin in Google Maps.
+
 ## Score and why
 
 The film page shows a score card built from `/api/films/<id>` -> `why`: the score (0-100), a coverage label

@@ -25,6 +25,13 @@ function h(tag, attrs, ...kids) {
   return e;
 }
 
+// "Open in Google Maps" under a theatre: the server pins the building's configured coordinates. No entry, no link.
+function mapLink(buildings, building) {
+  const b = buildings && buildings[building];
+  if (!b || !/^https:\/\/www\.google\.com\/maps\//.test(b.map_url)) return null;
+  return h('p', { class: 'meta maprow' }, h('a', { class: 'maplink', href: b.map_url, target: '_blank', rel: 'noopener' }, 'Open in Google Maps'), ` · ${b.address}`);
+}
+
 function titleCase(s) {
   if (!s) return '';
   let t = s.trim();
@@ -199,6 +206,7 @@ async function planView(id) {
         h('div', { class: 'tm' }, `${fmtMin(st.min)} \u2013 ${fmtMin(end)}`),
         h('h3', null, h('a', { href: '#/film/' + it.film_id }, titleCase(it.title))),
         h('p', { class: 'meta' }, it.venue),
+        mapLink(data.buildings, it.building),
         badges(it, false),
         it.why ? h('p', { class: 'meta why-line' }, `Score ${Math.round(it.why.score)}`, reasonLine(it.why) ? ' \u00b7 ' + reasonLine(it.why) : '') : null,
         it.note ? h('p', { class: 'meta' }, it.note) : null))));
@@ -432,7 +440,8 @@ async function pathsView(dayArg) {
         same ? [' ', h('a', { href: '#/plan/' + stored.id }, 'Day plan details')] : null));
       lines.push(h('div', { class: 'why' },
         best.s.map((sid, k) => [k ? h('div', { class: 'meta gap' }, `${nodes[sid].start - nodes[best.s[k - 1]].end} min between${nodes[sid].building !== nodes[best.s[k - 1]].building ? `, including a ${walkMin(nodes[sid].building, nodes[best.s[k - 1]].building)} min walk` : ''}`) : null,
-          h('div', null, `${fmtMin(nodes[sid].start)} – ${fmtMin(nodes[sid].end)}  `, h('a', { href: '#/film/' + nodes[sid].film_id }, titleCase(nodes[sid].title)), ` · ${nodes[sid].building}`)]),
+          h('div', null, `${fmtMin(nodes[sid].start)} – ${fmtMin(nodes[sid].end)}  `, h('a', { href: '#/film/' + nodes[sid].film_id }, titleCase(nodes[sid].title)), ` · ${nodes[sid].building}`),
+          mapLink(data.buildings, nodes[sid].building)]),
         h('div', { class: 'meta' }, `Score ${best.score.toFixed(1)} · ${money(best.cost)} · ${best.changes ? best.changes + ' building change' + (best.changes > 1 ? 's' : '') : 'all in one building'} · home about ${fmtMin(nodes[best.s[best.s.length - 1]].end + data.drive_min)}`)));
     }
     sum.replaceChildren(...lines);

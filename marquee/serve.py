@@ -111,6 +111,16 @@ def score_view(c, cfg: dict, film_id: str, labels: dict | None = None) -> dict |
             "taste": {"nudge": nudge, "because": parts.get("taste_because", [])}, "reasons": reasons}
 
 
+def building_info(cfg: dict) -> dict:
+    """building -> {address, map_url}. The Google Maps link pins the configured coordinates (never address text,
+    which a geocoder can place elsewhere). A building with no entry gets no link rather than a guessed one."""
+    out = {}
+    for name, b in cfg.get("buildings", {}).items():
+        out[name] = {"address": b["address"],
+                     "map_url": f"https://www.google.com/maps/search/?api=1&query={b['lat']:.6f},{b['lon']:.6f}"}
+    return out
+
+
 def festival(c) -> dict:
     cfg = load_config()
     fest = _rows(c, "SELECT * FROM festival ORDER BY starts_on DESC LIMIT 1")
@@ -214,7 +224,7 @@ def plans(c, day: str | None) -> dict:
             it["why"] = score_view(c, cfg, it["film_id"], labels)
             m = md.get(it["film_id"], {})
             it["ratings"], it["poster"] = m.get("ratings", []), m.get("poster")
-    return {"plans": out}
+    return {"plans": out, "buildings": building_info(cfg)}
 
 
 def glow_threshold(c, cfg: dict) -> float | None:
@@ -249,6 +259,7 @@ def paths(c, day: str) -> dict | None:
         n["poster"], n["ratings"] = m.get("poster"), m.get("ratings", [])
     out["buffers"] = {"same": cfg["plan"]["buffer_same_building_min"], "walk": cfg["plan"].get("walk_min", {}), "walk_m": cfg["plan"].get("walk_m", {}),
                       "fallback": cfg["plan"]["buffer_between_buildings_min"]}
+    out["buildings"] = building_info(cfg)
     out["drive_min"] = round(cfg["plan"]["drive_hours"] * 60)
     out["default_show"], out["more_show"] = cfg["plan"]["options_default"], cfg["plan"]["options_more"]
     return out
